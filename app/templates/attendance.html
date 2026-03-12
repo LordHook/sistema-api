@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}Control de Asistencia - CEMOVI{% endblock %}
+{% block page_title %}Control de Asistencia{% endblock %}
+{% block page_subtitle %}Registro diario de asistencia del personal{% endblock %}
+
+{% block page_actions %}
+<div class="d-flex gap-1 align-center">
+    <label style="color: var(--text-secondary); font-size: 0.85rem;">Fecha:</label>
+    <input type="date" class="form-control" id="attendance-date" style="max-width: 180px;"
+           onchange="loadAttendance()">
+</div>
+<button class="btn btn-success" onclick="saveAllAttendance()" id="btn-save-attendance">
+    💾 Guardar Todo
+</button>
+<button class="btn btn-outline btn-sm" onclick="openAuditModal()" id="btn-open-audit-attendance">📋 Auditoría</button>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h3>📋 Asistencia del <span id="attendance-date-label">-</span></h3>
+        <div class="d-flex gap-1">
+            <span class="badge badge-active" id="count-asistio">✅ 0</span>
+            <span class="badge badge-inactive" id="count-falto">❌ 0</span>
+            <span class="badge badge-cas" id="count-tardanza">⏰ 0</span>
+        </div>
+    </div>
+    <div class="card-body" style="padding: 0.75rem;">
+        <!-- Header Row -->
+        <div class="attendance-row" style="background: var(--bg-tertiary); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary);">
+            <div>N°</div>
+            <div>Turno</div>
+            <div>Trabajador</div>
+            <div>Estado</div>
+            <div>Validación</div>
+        </div>
+        <div class="attendance-grid" id="attendance-grid">
+            <div class="loading-overlay" id="attendance-loading">
+                <div class="spinner"></div>
+                <span>Cargando asistencia...</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/attendance.js') }}"></script>
+{% endblock %}

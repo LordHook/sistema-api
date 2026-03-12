@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}Rol de Servicio - CEMOVI{% endblock %}
+{% block page_title %}Rol de Servicio{% endblock %}
+{% block page_subtitle %}Horario mensual del personal{% endblock %}
+
+{% block page_actions %}
+<div class="month-picker">
+    <button class="btn-icon" onclick="changeMonth(-1)" id="btn-prev-month">◀</button>
+    <span class="month-label" id="month-label">-</span>
+    <button class="btn-icon" onclick="changeMonth(1)" id="btn-next-month">▶</button>
+</div>
+{% if current_user.is_admin %}
+<button class="btn btn-success" onclick="generateSchedule()" id="btn-generate-schedule">
+    ⚡ Generar Horario
+</button>
+{% endif %}
+<div class="d-flex gap-1">
+    <button class="btn btn-outline btn-sm" onclick="exportSchedule('xlsx')" id="btn-export-xlsx">📥 Excel</button>
+    <button class="btn btn-outline btn-sm" onclick="exportSchedule('pdf')" id="btn-export-pdf">📄 PDF</button>
+</div>
+<button class="btn btn-outline btn-sm" onclick="openAuditModal()" id="btn-open-audit-schedule">📋 Auditoría</button>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-body" style="padding: 0.5rem;">
+        <div class="schedule-container" id="schedule-container">
+            <div class="loading-overlay" id="schedule-loading">
+                <div class="spinner"></div>
+                <span>Cargando horario...</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Legend -->
+<div class="legend" id="schedule-legend">
+    <div class="legend-item">
+        <span class="legend-color shift-M">M</span>
+        <span>Mañana (06:00-14:00)</span>
+    </div>
+    <div class="legend-item">
+        <span class="legend-color shift-T">T</span>
+        <span>Tarde (14:00-22:00)</span>
+    </div>
+    <div class="legend-item">
+        <span class="legend-color shift-N">N</span>
+        <span>Noche (22:00-06:00)</span>
+    </div>
+    <div class="legend-item">
+        <span class="legend-color shift-D">D</span>
+        <span>Descanso</span>
+    </div>
+    <div class="legend-item">
+        <span class="legend-color shift-V">V</span>
+        <span>Vacaciones</span>
+    </div>
+    <div class="legend-item">
+        <span class="legend-color shift-C">C</span>
+        <span>Compensado</span>
+    </div>
+    <div class="legend-item">
+        <span class="legend-color shift-R">R</span>
+        <span>Renuncia</span>
+    </div>
+</div>
+
+<!-- Edit Shift Modal -->
+<div class="modal-backdrop" id="shift-modal-backdrop">
+    <div class="modal" style="max-width: 400px;">
+        <div class="modal-header">
+            <h3>Modificar Turno</h3>
+            <button class="modal-close" onclick="closeShiftModal()" id="btn-close-shift">✕</button>
+        </div>
+        <div class="modal-body">
+            <p id="shift-modal-info" class="mb-2" style="color: var(--text-secondary);"></p>
+            <div class="form-group">
+                <label for="shift-select">Nuevo Turno</label>
+                <select class="form-control" id="shift-select">
+                    <option value="M">M - Mañana</option>
+                    <option value="T">T - Tarde</option>
+                    <option value="N">N - Noche</option>
+                    <option value="D">D - Descanso</option>
+                    <option value="V">V - Vacaciones</option>
+                    <option value="C">C - Compensado</option>
+                </select>
+            </div>
+            <input type="hidden" id="shift-entry-id">
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeShiftModal()" id="btn-cancel-shift">Cancelar</button>
+            <button class="btn btn-primary" onclick="saveShiftChange()" id="btn-save-shift">Guardar</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/schedule.js') }}"></script>
+{% endblock %}

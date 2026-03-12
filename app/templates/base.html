@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="CEMOVI - Sistema de Gestión de Horarios y Control de Asistencia">
+    <title>{% block title %}CEMOVI{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    {% block head %}{% endblock %}
+</head>
+<body>
+    {% if current_user.is_authenticated %}
+    <div class="app-layout">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-brand">
+                <div class="brand-icon">🛡️</div>
+                <div>
+                    <h2>CEMOVI</h2>
+                    <small>Gestión de Horarios</small>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title">Principal</div>
+                    <a href="{{ url_for('dashboard.dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard.dashboard' %}active{% endif %}" id="nav-dashboard">
+                        <span class="nav-icon">📊</span> Dashboard
+                    </a>
+                    <a href="{{ url_for('schedule.schedule_page') }}" class="nav-link {% if request.endpoint == 'schedule.schedule_page' %}active{% endif %}" id="nav-schedule">
+                        <span class="nav-icon">📅</span> Rol de Servicio
+                    </a>
+                    <a href="{{ url_for('attendance.attendance_page') }}" class="nav-link {% if request.endpoint == 'attendance.attendance_page' %}active{% endif %}" id="nav-attendance">
+                        <span class="nav-icon">✅</span> Asistencia
+                    </a>
+                </div>
+
+                {% if current_user.is_admin %}
+                <div class="nav-section">
+                    <div class="nav-section-title">Administración</div>
+                    <a href="{{ url_for('personnel.personnel_page') }}" class="nav-link {% if request.endpoint == 'personnel.personnel_page' %}active{% endif %}" id="nav-personnel">
+                        <span class="nav-icon">👥</span> Personal
+                    </a>
+                </div>
+                {% endif %}
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="sidebar-user">
+                    <div class="user-avatar">{{ current_user.full_name[0] if current_user.full_name else 'U' }}</div>
+                    <div class="user-info">
+                        <div class="user-name">{{ current_user.full_name or current_user.username }}</div>
+                        <div class="user-role">{{ 'Administrador' if current_user.is_admin else 'Usuario' }}</div>
+                    </div>
+                    <a href="{{ url_for('auth.logout') }}" class="btn btn-icon btn-outline" title="Cerrar sesión" id="btn-logout">⏻</a>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="page-header">
+                <div>
+                    <button class="menu-toggle" onclick="document.getElementById('sidebar').classList.toggle('open')" id="btn-menu-toggle">☰</button>
+                    <h1 class="page-title">{% block page_title %}{% endblock %}</h1>
+                    <p class="page-subtitle">{% block page_subtitle %}{% endblock %}</p>
+                </div>
+                <div class="page-actions">
+                    {% block page_actions %}{% endblock %}
+                </div>
+            </header>
+
+            <div class="page-body">
+                {% block content %}{% endblock %}
+            </div>
+        </main>
+    </div>
+    {% else %}
+        {% block public_content %}{% endblock %}
+    {% endif %}
+
+    <!-- Flash messages -->
+    <div class="flash-container" id="flash-container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="flash-message flash-{{ category }}">
+            {{ message }}
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+    </div>
+
+    <!-- Audit Log Modal -->
+    <div class="modal-backdrop" id="audit-modal-backdrop">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>📋 Registro de Auditoría</h3>
+                <button class="modal-close" onclick="closeAuditModal()" id="btn-close-audit">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="filter-bar">
+                    <div>
+                        <label>Grupo</label>
+                        <select class="form-control" id="audit-filter-group">
+                            <option value="">Todos</option>
+                            <option value="1">Grupo 1</option>
+                            <option value="2">Grupo 2</option>
+                            <option value="3">Grupo 3</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Acción</label>
+                        <select class="form-control" id="audit-filter-action">
+                            <option value="">Todas</option>
+                            <option value="schedule_change">Cambio Horario</option>
+                            <option value="attendance_change">Cambio Asistencia</option>
+                            <option value="worker_change">Cambio Personal</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Desde</label>
+                        <input type="date" class="form-control" id="audit-filter-start">
+                    </div>
+                    <div>
+                        <label>Hasta</label>
+                        <input type="date" class="form-control" id="audit-filter-end">
+                    </div>
+                    <button class="btn btn-primary btn-sm" onclick="loadAuditLogs()" id="btn-filter-audit">Filtrar</button>
+                </div>
+                <div class="table-container">
+                    <table class="table" id="audit-table">
+                        <thead>
+                            <tr>
+                                <th>Fecha/Hora</th>
+                                <th>Usuario</th>
+                                <th>Acción</th>
+                                <th>Trabajador</th>
+                                <th>Fecha</th>
+                                <th>Anterior</th>
+                                <th>Nuevo</th>
+                                <th>Detalles</th>
+                            </tr>
+                        </thead>
+                        <tbody id="audit-table-body">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline btn-sm" onclick="exportAuditLogs()" id="btn-export-audit">📥 Exportar Excel</button>
+                <button class="btn btn-outline btn-sm" onclick="closeAuditModal()" id="btn-cancel-audit">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

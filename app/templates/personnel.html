@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block title %}Gestión de Personal - CEMOVI{% endblock %}
+{% block page_title %}Gestión de Personal{% endblock %}
+{% block page_subtitle %}Registro y administración del personal{% endblock %}
+
+{% block page_actions %}
+<button class="btn btn-primary" onclick="openPersonnelModal()" id="btn-add-worker">
+    ➕ Agregar Trabajador
+</button>
+<button class="btn btn-outline btn-sm" onclick="openAuditModal()" id="btn-open-audit-personnel">📋 Auditoría</button>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-body" style="padding: 0;">
+        <div class="table-container">
+            <table class="table" id="personnel-table">
+                <thead>
+                    <tr>
+                        <th>N°</th>
+                        <th>Régimen</th>
+                        <th>Apellidos y Nombres</th>
+                        <th>Sección</th>
+                        <th>Área</th>
+                        <th>Grupo</th>
+                        <th>Estado</th>
+                        <th>Renuncia</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="personnel-table-body">
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Add/Edit Worker Modal -->
+<div class="modal-backdrop" id="worker-modal-backdrop">
+    <div class="modal" style="max-width: 600px;">
+        <div class="modal-header">
+            <h3 id="worker-modal-title">Agregar Trabajador</h3>
+            <button class="modal-close" onclick="closePersonnelModal()" id="btn-close-worker">✕</button>
+        </div>
+        <div class="modal-body">
+            <form id="worker-form">
+                <input type="hidden" id="worker-id">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div class="form-group">
+                        <label for="worker-first-name">Nombres</label>
+                        <input type="text" class="form-control" id="worker-first-name" required placeholder="Ej: Juan Carlos">
+                    </div>
+                    <div class="form-group">
+                        <label for="worker-last-name">Apellidos</label>
+                        <input type="text" class="form-control" id="worker-last-name" required placeholder="Ej: García López">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="worker-regime">Régimen Laboral (R.L)</label>
+                    <select class="form-control" id="worker-regime" required>
+                        <option value="">Seleccionar...</option>
+                        <option value="CAS">CAS</option>
+                        <option value="LS">LS</option>
+                    </select>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div class="form-group">
+                        <label for="worker-section">Sección</label>
+                        <select class="form-control" id="worker-section" required onchange="updateAreaOptions()">
+                            <option value="">Seleccionar...</option>
+                            <option value="A">A - Jefatura</option>
+                            <option value="B">B - Gestión de Video</option>
+                            <option value="C">C - Supervisores</option>
+                            <option value="D">D - Operativo</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="worker-area">Área</label>
+                        <select class="form-control" id="worker-area" required>
+                            <option value="">Seleccionar sección primero</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group" id="group-field" style="display: none;">
+                    <label for="worker-group">Grupo Operativo</label>
+                    <select class="form-control" id="worker-group">
+                        <option value="">Seleccionar...</option>
+                        <option value="1">Grupo 1</option>
+                        <option value="2">Grupo 2</option>
+                        <option value="3">Grupo 3</option>
+                    </select>
+                </div>
+
+                <div class="form-group" id="resignation-field" style="display: none;">
+                    <label for="worker-resignation">Fecha de Renuncia</label>
+                    <input type="date" class="form-control" id="worker-resignation">
+                    <small class="text-muted">Dejar vacío si el trabajador está activo</small>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closePersonnelModal()" id="btn-cancel-worker">Cancelar</button>
+            <button class="btn btn-primary" onclick="saveWorker()" id="btn-save-worker">Guardar</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/personnel.js') }}"></script>
+{% endblock %}
