@@ -17,7 +17,7 @@ from app.models.worker import Worker
 
 
 def generate_monthly_schedule(year, month):
-    """Genera el rol de servicio completo para un mes dado."""
+    """Genera el rol de servicio completo para un mes dado (todo el personal)."""
     num_days = calendar.monthrange(year, month)[1]
 
     # Limpiar entradas auto-generadas previas del mes
@@ -26,8 +26,69 @@ def generate_monthly_schedule(year, month):
     ).delete()
     db.session.flush()
 
+    all_workers = _get_relevant_workers(year, month)
+
+    # Group workers by section
+    sections = {'A': [], 'B': [], 'C': [], 'D': []}
+    for w in all_workers:
+        if w.section in sections:
+            sections[w.section].append(w)
+
+    entries = []
+
+    # Sections A, B, C (fixed shift)
+    for section_key in ['A', 'B', 'C']:
+        entries.extend(
+            _generate_fixed_shift_section(sections[section_key], year, month, num_days, 'M')
+        )
+
+    # Section D (rotating shifts by group)
+    entries.extend(_generate_section_d(sections['D'], year, month, num_days))
+
+    db.session.add_all(entries)
+    db.session.commit()
+    return len(entries)
+
+
+def generate_group_schedule(year, month, group_number):
+    """Genera el horario exclusivamente para un grupo operativo específico (1, 2 o 3).
+    La distribución equitativa de descansos se calcula solo con los integrantes de ese grupo.
+    """
+    num_days = calendar.monthrange(year, month)[1]
+
+    all_workers = _get_relevant_workers(year, month)
+    group_workers = [w for w in all_workers if w.section == 'D' and (w.group_number or 1) == group_number]
+
+    if not group_workers:
+        return 0
+
+    # Delete only this group's auto-generated entries
+    worker_ids = [w.id for w in group_workers]
+    ScheduleEntry.query.filter(
+        ScheduleEntry.worker_id.in_(worker_ids),
+        ScheduleEntry.year == year,
+        ScheduleEntry.month == month,
+        ScheduleEntry.is_auto_generated == True,  # noqa: E712
+    ).delete(synchronize_session='fetch')
+    db.session.flush()
+
+    # Generate only for this group
+    shift_rotation = ['M', 'T', 'N']
+    base_shift_index = (group_number - 1) % 3
+
+    entries = _generate_rotating_section(
+        group_workers, year, month, num_days,
+        shift_rotation, base_shift_index
+    )
+
+    db.session.add_all(entries)
+    db.session.commit()
+    return len(entries)
+
+
+def _get_relevant_workers(year, month):
+    """Get active workers and those who resigned during this month."""
     workers = Worker.query.filter_by(status='activo').order_by(Worker.order_number).all()
-    # Also include workers who resigned DURING this month
     resigned_this_month = Worker.query.filter(
         Worker.status == 'inactivo',
         Worker.resignation_date != None,  # noqa: E711
@@ -35,32 +96,14 @@ def generate_monthly_schedule(year, month):
         db.extract('month', Worker.resignation_date) == month,
     ).order_by(Worker.order_number).all()
 
-    all_workers = workers + [w for w in resigned_this_month if w not in workers]
+    return workers + [w for w in resigned_this_month if w not in workers]
 
-    # Group workers by section
-    sections = {
-        'A': [],  # Jefatura
-        'B': [],  # Gestión de Video
-        'C': [],  # Supervisores
-        'D': [],  # Operativo (Groups 1-3)
-    }
 
-    for w in all_workers:
-        if w.section in sections:
-            sections[w.section].append(w)
-
+def _generate_section_d(d_workers, year, month, num_days):
+    """Generate rotating shifts for Section D organized by groups."""
     entries = []
-
-    # Generate for sections A, B, C (fixed shift, only manage rest days)
-    for section_key in ['A', 'B', 'C']:
-        section_workers = sections[section_key]
-        entries.extend(
-            _generate_fixed_shift_section(section_workers, year, month, num_days, 'M')
-        )
-
-    # Generate for section D (rotating shifts M→T→N by group)
     groups = {}
-    for w in sections['D']:
+    for w in d_workers:
         g = w.group_number or 1
         if g not in groups:
             groups[g] = []
@@ -76,10 +119,7 @@ def generate_monthly_schedule(year, month):
                 shift_rotation, base_shift_index
             )
         )
-
-    db.session.add_all(entries)
-    db.session.commit()
-    return len(entries)
+    return entries
 
 
 def _generate_fixed_shift_section(workers, year, month, num_days, default_shift):
@@ -88,8 +128,7 @@ def _generate_fixed_shift_section(workers, year, month, num_days, default_shift)
     total_workers = len(workers)
 
     for idx, worker in enumerate(workers):
-        # Compute rest day offset for this worker to distribute evenly
-        rest_day_start = (idx % 7) + 1  # Day 1-7
+        rest_day_start = (idx % 7) + 1
 
         for day in range(1, num_days + 1):
             current_date = date(year, month, day)
@@ -99,9 +138,7 @@ def _generate_fixed_shift_section(workers, year, month, num_days, default_shift)
             )
             entries.append(ScheduleEntry(
                 worker_id=worker.id,
-                year=year,
-                month=month,
-                day=day,
+                year=year, month=month, day=day,
                 shift_code=shift,
                 is_auto_generated=True,
             ))
@@ -111,7 +148,9 @@ def _generate_fixed_shift_section(workers, year, month, num_days, default_shift)
 
 def _generate_rotating_section(workers, year, month, num_days,
                                 shift_rotation, base_shift_index):
-    """Sección D: turnos rotativos M→T→N con descansos escalonados."""
+    """Sección D: turnos rotativos M→T→N con descansos escalonados.
+    Distribución equitativa: ~len(workers)/7 descansan por día.
+    """
     entries = []
     total_workers = len(workers)
 
@@ -123,7 +162,6 @@ def _generate_rotating_section(workers, year, month, num_days,
 
             # Determine which week we're in (0-based)
             week_num = (day - 1) // 7
-            # Rotate shift each week for the group
             current_shift_index = (base_shift_index + week_num) % len(shift_rotation)
             work_shift = shift_rotation[current_shift_index]
 
@@ -133,9 +171,7 @@ def _generate_rotating_section(workers, year, month, num_days,
             )
             entries.append(ScheduleEntry(
                 worker_id=worker.id,
-                year=year,
-                month=month,
-                day=day,
+                year=year, month=month, day=day,
                 shift_code=shift,
                 is_auto_generated=True,
             ))
@@ -174,11 +210,6 @@ def _is_rest_day(day, rest_day_start, current_date):
     Rest advances +1 day each week (every 8 days from last rest).
     When crossing Sunday→Monday, grant 2 consecutive rest days.
     """
-    # Calculate which "cycle day" this is relative to worker's rest pattern
-    # rest_day_start is the first rest day (1-7)
-    # Pattern: rest on day X, then X+8, then X+16, etc.
-    # But adjusted: rest advances +1 each week
-
     days_since_start = day - rest_day_start
 
     if days_since_start < 0:
@@ -189,9 +220,7 @@ def _is_rest_day(day, rest_day_start, current_date):
         return True
 
     # Check for the "double rest" when crossing Sun→Mon
-    # If rest day falls on Sunday (weekday 6), the next day (Monday) is also rest
     if days_since_start > 0 and (days_since_start - 1) % 8 == 0:
-        # Previous day was a rest day, check if it was a Sunday
         prev_day = day - 1
         if prev_day >= 1:
             prev_date = date(current_date.year, current_date.month, prev_day)
@@ -201,14 +230,16 @@ def _is_rest_day(day, rest_day_start, current_date):
     return False
 
 
-def get_schedule_grid(year, month):
-    """Returns the schedule data structured for the grid view."""
+def get_schedule_grid(year, month, group_filter=None):
+    """Returns the schedule data structured for the grid view.
+    group_filter: 'all', 'staff', '1', '2', '3', or None
+    """
     num_days = calendar.monthrange(year, month)[1]
 
     workers = Worker.query.order_by(Worker.section, Worker.group_number,
                                      Worker.order_number).all()
 
-    # Filter to only include active workers or those who resigned during this month
+    # Filter to relevant workers
     relevant_workers = []
     for w in workers:
         if w.status == 'activo':
@@ -219,17 +250,22 @@ def get_schedule_grid(year, month):
             elif w.resignation_date.year > year:
                 relevant_workers.append(w)
 
-    entries = ScheduleEntry.query.filter_by(year=year, month=month).all()
+    # Apply group filter
+    if group_filter and group_filter != 'all':
+        if group_filter == 'staff':
+            relevant_workers = [w for w in relevant_workers if w.section in ('A', 'B', 'C')]
+        elif group_filter.isdigit():
+            gnum = int(group_filter)
+            relevant_workers = [w for w in relevant_workers
+                                if w.section == 'D' and (w.group_number or 1) == gnum]
 
-    # Build lookup dict
+    entries = ScheduleEntry.query.filter_by(year=year, month=month).all()
     entry_map = {}
     for e in entries:
         entry_map[(e.worker_id, e.day)] = e
 
-    # Build sections
-    sections = _build_sections(relevant_workers, entry_map, num_days)
+    sections = _build_sections(relevant_workers, entry_map, num_days, group_filter)
 
-    # Day headers with weekday names
     day_headers = []
     for d in range(1, num_days + 1):
         dt = date(year, month, d)
@@ -249,13 +285,43 @@ def get_schedule_grid(year, month):
         'num_days': num_days,
         'day_headers': day_headers,
         'sections': sections,
+        'group_filter': group_filter,
     }
 
 
-def _build_sections(workers, entry_map, num_days):
+def _build_sections(workers, entry_map, num_days, group_filter=None):
     """Organizes workers into display sections."""
     sections = []
 
+    # If filtering by a specific group, only show section D
+    if group_filter and group_filter.isdigit() if group_filter else False:
+        gnum = int(group_filter)
+        d_workers = [w for w in workers if w.section == 'D']
+        if d_workers:
+            groups_data = {'CCO': [], 'SCV': []}
+            for w in d_workers:
+                area_key = w.area if w.area in ('CCO', 'SCV') else 'CCO'
+                groups_data[area_key].append(w)
+
+            d_groups = []
+            for area in ['CCO', 'SCV']:
+                area_workers = groups_data.get(area, [])
+                if area_workers:
+                    d_groups.append({
+                        'label': f'Grupo {gnum} - {area}',
+                        'rows': _build_worker_rows(area_workers, entry_map, num_days)['rows'],
+                    })
+
+            if d_groups:
+                total_in_group = sum(len(g['rows']) for g in d_groups)
+                sections.append({
+                    'key': 'D',
+                    'name': f'Grupo {gnum} — Rol de Servicio Operativo ({total_in_group} integrantes, ~{total_in_group // 7 or 1} descansos/día)',
+                    'groups': d_groups,
+                })
+        return sections
+
+    # Normal view (all or staff)
     section_config = [
         ('A', 'Jefatura CEMOVI, Planta Externa, Encargados y Coordinadores', None),
         ('B', 'Área de Gestión de Video', None),
@@ -271,33 +337,34 @@ def _build_sections(workers, entry_map, num_days):
                 'groups': [_build_worker_rows(sec_workers, entry_map, num_days)],
             })
 
-    # Section D - split by groups
-    d_workers = [w for w in workers if w.section == 'D']
-    if d_workers:
-        groups_data = {}
-        for w in d_workers:
-            g = w.group_number or 1
-            if g not in groups_data:
-                groups_data[g] = {'CCO': [], 'SCV': []}
-            area_key = w.area if w.area in ('CCO', 'SCV') else 'CCO'
-            groups_data[g][area_key].append(w)
+    # Section D - show if 'all' or no filter
+    if not group_filter or group_filter == 'all':
+        d_workers = [w for w in workers if w.section == 'D']
+        if d_workers:
+            groups_data = {}
+            for w in d_workers:
+                g = w.group_number or 1
+                if g not in groups_data:
+                    groups_data[g] = {'CCO': [], 'SCV': []}
+                area_key = w.area if w.area in ('CCO', 'SCV') else 'CCO'
+                groups_data[g][area_key].append(w)
 
-        d_groups = []
-        for group_num in sorted(groups_data.keys()):
-            for area in ['CCO', 'SCV']:
-                area_workers = groups_data[group_num].get(area, [])
-                if area_workers:
-                    d_groups.append({
-                        'label': f'Grupo {group_num} - {area}',
-                        'rows': _build_worker_rows(area_workers, entry_map, num_days)['rows'],
-                    })
+            d_groups = []
+            for group_num in sorted(groups_data.keys()):
+                for area in ['CCO', 'SCV']:
+                    area_workers = groups_data[group_num].get(area, [])
+                    if area_workers:
+                        d_groups.append({
+                            'label': f'Grupo {group_num} - {area}',
+                            'rows': _build_worker_rows(area_workers, entry_map, num_days)['rows'],
+                        })
 
-        if d_groups:
-            sections.append({
-                'key': 'D',
-                'name': 'Rol de Servicio Operativo',
-                'groups': d_groups,
-            })
+            if d_groups:
+                sections.append({
+                    'key': 'D',
+                    'name': 'Rol de Servicio Operativo',
+                    'groups': d_groups,
+                })
 
     return sections
 

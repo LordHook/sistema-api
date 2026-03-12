@@ -1,6 +1,7 @@
-/* ===== Schedule Grid ===== */
+/* ===== Schedule Grid with Group Filtering ===== */
 
 let currentYear, currentMonth;
+let currentGroupFilter = 'all';
 const IS_ADMIN = document.querySelector('[id="btn-generate-schedule"]') !== null;
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -10,6 +11,18 @@ document.addEventListener('DOMContentLoaded', () => {
     loadSchedule();
 });
 
+/* ===== GROUP FILTER TABS ===== */
+function filterByGroup(group) {
+    currentGroupFilter = group;
+    // Update tab active state
+    document.querySelectorAll('.group-tab').forEach(tab => tab.classList.remove('active'));
+    const activeTab = document.querySelector(`.group-tab[data-group="${group}"]`);
+    if (activeTab) activeTab.classList.add('active');
+
+    loadSchedule();
+}
+
+/* ===== MONTH NAVIGATION ===== */
 function changeMonth(delta) {
     currentMonth += delta;
     if (currentMonth > 12) { currentMonth = 1; currentYear++; }
@@ -17,14 +30,18 @@ function changeMonth(delta) {
     loadSchedule();
 }
 
+/* ===== LOAD SCHEDULE ===== */
 async function loadSchedule() {
     const container = document.getElementById('schedule-container');
     container.innerHTML = '<div class="loading-overlay"><div class="spinner"></div><span>Cargando horario...</span></div>';
-
-    document.getElementById('month-label').textContent = `Cargando...`;
+    document.getElementById('month-label').textContent = 'Cargando...';
 
     try {
-        const grid = await apiFetch(`/api/schedule?year=${currentYear}&month=${currentMonth}`);
+        let url = `/api/schedule?year=${currentYear}&month=${currentMonth}`;
+        if (currentGroupFilter && currentGroupFilter !== 'all') {
+            url += `&group=${currentGroupFilter}`;
+        }
+        const grid = await apiFetch(url);
         document.getElementById('month-label').textContent = `${grid.month_name} ${grid.year}`;
         renderScheduleGrid(grid);
     } catch (e) {
@@ -32,15 +49,17 @@ async function loadSchedule() {
     }
 }
 
+/* ===== RENDER SCHEDULE GRID ===== */
 function renderScheduleGrid(grid) {
     const container = document.getElementById('schedule-container');
 
     if (!grid.sections || grid.sections.length === 0) {
+        const filterLabel = currentGroupFilter === 'all' ? '' : ` para ${_getGroupLabel(currentGroupFilter)}`;
         container.innerHTML = `
             <div class="empty-state">
                 <div class="empty-icon">📅</div>
-                <h4>No hay horario generado para ${grid.month_name} ${grid.year}</h4>
-                <p>Haz clic en "Generar Horario" para crear el rol de servicio</p>
+                <h4>No hay horario generado para ${grid.month_name} ${grid.year}${filterLabel}</h4>
+                <p>${IS_ADMIN ? 'Haz clic en "⚡ Generar Horario" para crear el rol de servicio' : 'El administrador aún no genera el horario'}</p>
             </div>`;
         return;
     }
@@ -56,7 +75,6 @@ function renderScheduleGrid(grid) {
     html += '</tr></thead><tbody>';
 
     grid.sections.forEach(section => {
-        // Section header
         html += `<tr><td class="section-header" colspan="${grid.num_days + 3}">
             SECCIÓN ${section.key}: ${section.name}</td></tr>`;
 
@@ -94,13 +112,34 @@ function renderScheduleGrid(grid) {
     container.innerHTML = html;
 }
 
+function _getGroupLabel(filter) {
+    if (filter === 'staff') return 'Secciones A/B/C';
+    if (filter === '1') return 'Grupo 1';
+    if (filter === '2') return 'Grupo 2';
+    if (filter === '3') return 'Grupo 3';
+    return 'Todo el personal';
+}
+
+/* ===== GENERATE SCHEDULE ===== */
 async function generateSchedule() {
-    if (!confirm(`¿Generar el horario para ${currentMonth}/${currentYear}? Esto reemplazará las entradas auto-generadas existentes.`)) return;
+    const groupLabel = _getGroupLabel(currentGroupFilter);
+    const isGroupSpecific = ['1', '2', '3'].includes(currentGroupFilter);
+
+    const msg = isGroupSpecific
+        ? `¿Generar el horario solo para ${groupLabel} en ${currentMonth}/${currentYear}? La distribución de descansos se calculará con los integrantes de este grupo.`
+        : `¿Generar el horario de todo el personal para ${currentMonth}/${currentYear}? Esto reemplazará las entradas auto-generadas existentes.`;
+
+    if (!confirm(msg)) return;
+
+    const body = { year: currentYear, month: currentMonth };
+    if (isGroupSpecific) {
+        body.group = currentGroupFilter;
+    }
 
     try {
         const result = await apiFetch('/api/schedule/generate', {
             method: 'POST',
-            body: JSON.stringify({ year: currentYear, month: currentMonth }),
+            body: JSON.stringify(body),
         });
         showFlash(result.message);
         loadSchedule();
@@ -109,6 +148,7 @@ async function generateSchedule() {
     }
 }
 
+/* ===== SHIFT EDIT MODAL ===== */
 function openShiftModal(entryId, workerName, day, currentShift) {
     document.getElementById('shift-modal-info').textContent = `${workerName} — Día ${day}`;
     document.getElementById('shift-select').value = currentShift;
@@ -137,6 +177,11 @@ async function saveShiftChange() {
     }
 }
 
+/* ===== EXPORT ===== */
 function exportSchedule(format) {
-    window.location.href = `/export/schedule?year=${currentYear}&month=${currentMonth}&format=${format}`;
+    let url = `/export/schedule?year=${currentYear}&month=${currentMonth}&format=${format}`;
+    if (currentGroupFilter && currentGroupFilter !== 'all') {
+        url += `&group=${currentGroupFilter}`;
+    }
+    window.location.href = url;
 }

@@ -1,5 +1,8 @@
 /* ===== Personnel Management ===== */
 
+let currentView = 'table';
+let allWorkers = [];
+
 document.addEventListener('DOMContentLoaded', loadPersonnel);
 
 const AREA_OPTIONS = {
@@ -14,13 +17,24 @@ const AREA_OPTIONS = {
 
 async function loadPersonnel() {
     try {
-        const workers = await apiFetch('/api/personnel');
-        renderPersonnelTable(workers);
+        allWorkers = await apiFetch('/api/personnel');
+        renderPersonnelTable(allWorkers);
+        renderGroupCards(allWorkers);
     } catch (e) {
         // handled
     }
 }
 
+/* ===== VIEW TOGGLE ===== */
+function switchView(view) {
+    currentView = view;
+    document.getElementById('view-table').style.display = view === 'table' ? '' : 'none';
+    document.getElementById('view-groups').style.display = view === 'groups' ? '' : 'none';
+    document.getElementById('btn-view-table').className = view === 'table' ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
+    document.getElementById('btn-view-groups').className = view === 'groups' ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
+}
+
+/* ===== TABLE VIEW ===== */
 function renderPersonnelTable(workers) {
     const tbody = document.getElementById('personnel-table-body');
 
@@ -49,6 +63,7 @@ function renderPersonnelTable(workers) {
             <td>
                 <div class="d-flex gap-1">
                     <button class="btn btn-outline btn-sm" onclick="editWorker(${w.id})" title="Editar">✏️</button>
+                    ${w.section === 'D' ? `<button class="btn btn-outline btn-sm" onclick="openMoveModal(${w.id})" title="Mover">🔄</button>` : ''}
                     <button class="btn btn-outline btn-sm" onclick="resignWorker(${w.id})" title="Renuncia">📝</button>
                     <button class="btn btn-outline btn-sm" onclick="deleteWorker(${w.id})" title="Eliminar" style="color:var(--accent-red);">🗑️</button>
                 </div>
@@ -56,6 +71,94 @@ function renderPersonnelTable(workers) {
         </tr>`).join('');
 }
 
+/* ===== GROUP CARDS VIEW ===== */
+function renderGroupCards(workers) {
+    // Sections A, B, C
+    ['A', 'B', 'C'].forEach(sec => {
+        const list = document.getElementById(`section-${sec}-list`);
+        const secWorkers = workers.filter(w => w.section === sec);
+        document.getElementById(`count-section-${sec}`).textContent = secWorkers.length;
+
+        if (secWorkers.length === 0) {
+            list.innerHTML = '<div class="empty-subgroup">Sin personal asignado</div>';
+            return;
+        }
+        list.innerHTML = secWorkers.map(w => _workerChip(w, false)).join('');
+    });
+
+    // Groups 1, 2, 3 with CCO/SCV
+    for (let g = 1; g <= 3; g++) {
+        let groupTotal = 0;
+        ['CCO', 'SCV'].forEach(area => {
+            const key = `g${g}-${area.toLowerCase()}`;
+            const list = document.getElementById(`${key}-list`);
+            const areaWorkers = workers.filter(w =>
+                w.section === 'D' && (w.group_number || 1) === g && w.area === area
+            );
+            document.getElementById(`count-${key}`).textContent = areaWorkers.length;
+            groupTotal += areaWorkers.length;
+
+            if (areaWorkers.length === 0) {
+                list.innerHTML = '<div class="empty-subgroup">Sin personal</div>';
+                return;
+            }
+            list.innerHTML = areaWorkers.map(w => _workerChip(w, true)).join('');
+        });
+        document.getElementById(`count-group-${g}`).textContent = `${groupTotal} integ.`;
+    }
+}
+
+function _workerChip(w, showMoveBtn) {
+    const statusClass = w.status === 'activo' ? '' : 'worker-chip-inactive';
+    return `
+        <div class="worker-chip ${statusClass}" data-worker-id="${w.id}">
+            <div class="chip-info">
+                <span class="chip-number">${w.order_number}</span>
+                <span class="chip-name">${w.full_name}</span>
+                <span class="badge badge-${w.regime.toLowerCase()} chip-badge">${w.regime}</span>
+            </div>
+            <div class="chip-actions">
+                ${showMoveBtn ? `<button class="chip-btn" onclick="openMoveModal(${w.id})" title="Mover a otro grupo">🔄</button>` : ''}
+                <button class="chip-btn" onclick="editWorker(${w.id})" title="Editar">✏️</button>
+            </div>
+        </div>`;
+}
+
+/* ===== MOVE WORKER MODAL ===== */
+function openMoveModal(workerId) {
+    const w = allWorkers.find(x => x.id === workerId);
+    if (!w) return;
+
+    document.getElementById('move-worker-id').value = workerId;
+    document.getElementById('move-worker-name').textContent = `Mover a: ${w.full_name} (actual: Grupo ${w.group_number || '?'} - ${w.area})`;
+    document.getElementById('move-group').value = w.group_number || 1;
+    document.getElementById('move-area').value = w.area || 'CCO';
+    document.getElementById('move-modal-backdrop').classList.add('active');
+}
+
+function closeMoveModal() {
+    document.getElementById('move-modal-backdrop').classList.remove('active');
+}
+
+async function executeMoveWorker() {
+    const workerId = document.getElementById('move-worker-id').value;
+    const newGroup = parseInt(document.getElementById('move-group').value);
+    const newArea = document.getElementById('move-area').value;
+
+    try {
+        await apiFetch(`/api/personnel/${workerId}`, {
+            method: 'PUT',
+            body: JSON.stringify({ group_number: newGroup, area: newArea }),
+        });
+        showFlash(`Trabajador movido a Grupo ${newGroup} - ${newArea}`);
+        closeMoveModal();
+        loadPersonnel();
+    } catch (e) {
+        // handled
+    }
+}
+
+/* ===== AREA OPTIONS ===== */
 function updateAreaOptions() {
     const section = document.getElementById('worker-section').value;
     const areaSelect = document.getElementById('worker-area');
@@ -77,6 +180,7 @@ function updateAreaOptions() {
     groupField.style.display = section === 'D' ? 'block' : 'none';
 }
 
+/* ===== ADD/EDIT MODAL ===== */
 function openPersonnelModal(worker = null) {
     const modal = document.getElementById('worker-modal-backdrop');
     const title = document.getElementById('worker-modal-title');
@@ -143,20 +247,14 @@ async function saveWorker() {
 }
 
 async function editWorker(id) {
-    try {
-        const workers = await apiFetch('/api/personnel');
-        const worker = workers.find(w => w.id === id);
-        if (worker) openPersonnelModal(worker);
-    } catch (e) {
-        // handled
-    }
+    const worker = allWorkers.find(w => w.id === id);
+    if (worker) openPersonnelModal(worker);
 }
 
 async function resignWorker(id) {
     const resignDate = prompt('Ingrese la fecha de renuncia (YYYY-MM-DD):');
     if (!resignDate) return;
 
-    // Validate date format
     if (!/^\d{4}-\d{2}-\d{2}$/.test(resignDate)) {
         showFlash('Formato de fecha inválido. Use YYYY-MM-DD', 'error');
         return;

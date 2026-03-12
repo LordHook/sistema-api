@@ -4,7 +4,11 @@ from datetime import date
 from app.extensions import db
 from app.models.schedule import ScheduleEntry
 from app.models.audit import AuditLog
-from app.services.schedule_generator import generate_monthly_schedule, get_schedule_grid
+from app.services.schedule_generator import (
+    generate_monthly_schedule,
+    generate_group_schedule,
+    get_schedule_grid,
+)
 
 schedule_bp = Blueprint('schedule', __name__)
 
@@ -20,7 +24,8 @@ def schedule_page():
 def get_schedule():
     year = request.args.get('year', date.today().year, type=int)
     month = request.args.get('month', date.today().month, type=int)
-    grid = get_schedule_grid(year, month)
+    group = request.args.get('group', None)  # 'all', 'staff', '1', '2', '3'
+    grid = get_schedule_grid(year, month, group_filter=group)
     return jsonify(grid)
 
 
@@ -33,18 +38,24 @@ def generate_schedule():
     data = request.get_json()
     year = data.get('year', date.today().year)
     month = data.get('month', date.today().month)
+    group = data.get('group', None)  # None = all, '1'/'2'/'3' = specific group
 
-    count = generate_monthly_schedule(year, month)
+    if group and group.isdigit():
+        count = generate_group_schedule(year, month, int(group))
+        group_label = f'Grupo {group}'
+    else:
+        count = generate_monthly_schedule(year, month)
+        group_label = 'todo el personal'
 
     AuditLog.log(
         user_id=current_user.id,
         action='schedule_change',
-        details=f'Horario generado para {month}/{year} ({count} entradas)',
+        details=f'Horario generado para {group_label} en {month}/{year} ({count} entradas)',
     )
     db.session.commit()
 
     return jsonify({
-        'message': f'Horario generado exitosamente: {count} entradas creadas',
+        'message': f'Horario generado exitosamente para {group_label}: {count} entradas creadas',
         'count': count,
     })
 

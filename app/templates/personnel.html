@@ -12,26 +12,137 @@
 {% endblock %}
 
 {% block content %}
-<div class="card">
-    <div class="card-body" style="padding: 0;">
-        <div class="table-container">
-            <table class="table" id="personnel-table">
-                <thead>
-                    <tr>
-                        <th>N°</th>
-                        <th>Régimen</th>
-                        <th>Apellidos y Nombres</th>
-                        <th>Sección</th>
-                        <th>Área</th>
-                        <th>Grupo</th>
-                        <th>Estado</th>
-                        <th>Renuncia</th>
-                        <th>Acciones</th>
-                    </tr>
-                </thead>
-                <tbody id="personnel-table-body">
-                </tbody>
-            </table>
+<!-- Vista Toggle: Tabla / Grupos -->
+<div class="d-flex gap-1 mb-2">
+    <button class="btn btn-primary btn-sm" id="btn-view-table" onclick="switchView('table')">📋 Vista Tabla</button>
+    <button class="btn btn-outline btn-sm" id="btn-view-groups" onclick="switchView('groups')">🏢 Vista Grupos</button>
+</div>
+
+<!-- ========== VISTA TABLA ========== -->
+<div id="view-table">
+    <div class="card">
+        <div class="card-body" style="padding: 0;">
+            <div class="table-container">
+                <table class="table" id="personnel-table">
+                    <thead>
+                        <tr>
+                            <th>N°</th>
+                            <th>Régimen</th>
+                            <th>Apellidos y Nombres</th>
+                            <th>Sección</th>
+                            <th>Área</th>
+                            <th>Grupo</th>
+                            <th>Estado</th>
+                            <th>Renuncia</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="personnel-table-body">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========== VISTA GRUPOS (TARJETAS INTERACTIVAS) ========== -->
+<div id="view-groups" style="display: none;">
+    <!-- Secciones A/B/C -->
+    <div class="group-sections-row mb-3">
+        <div class="card group-card section-card">
+            <div class="card-header">
+                <h3>🏛️ Sección A — Jefatura</h3>
+                <span class="badge badge-cas" id="count-section-A">0</span>
+            </div>
+            <div class="card-body group-card-body" id="section-A-list"></div>
+        </div>
+        <div class="card group-card section-card">
+            <div class="card-header">
+                <h3>📹 Sección B — Gestión de Video</h3>
+                <span class="badge badge-cas" id="count-section-B">0</span>
+            </div>
+            <div class="card-body group-card-body" id="section-B-list"></div>
+        </div>
+        <div class="card group-card section-card">
+            <div class="card-header">
+                <h3>👁️ Sección C — Supervisores</h3>
+                <span class="badge badge-cas" id="count-section-C">0</span>
+            </div>
+            <div class="card-body group-card-body" id="section-C-list"></div>
+        </div>
+    </div>
+
+    <!-- Sección D: 3 Grupos Operativos -->
+    <h3 style="margin-bottom: 1rem; color: var(--accent-cyan);">⚙️ Sección D — Rol de Servicio Operativo</h3>
+    <div class="groups-grid" id="groups-grid">
+        <!-- Grupo 1 -->
+        <div class="card group-card">
+            <div class="card-header group-card-header" style="border-top: 3px solid var(--accent-blue);">
+                <h3>🔵 Grupo 1</h3>
+                <span class="badge badge-active" id="count-group-1">0</span>
+            </div>
+            <div class="card-body" style="padding: 0;">
+                <div class="subgroup-section">
+                    <div class="subgroup-header">
+                        <span>📡 CCO</span>
+                        <span class="badge badge-cas" id="count-g1-cco">0</span>
+                    </div>
+                    <div class="subgroup-list" id="g1-cco-list" data-group="1" data-area="CCO"></div>
+                </div>
+                <div class="subgroup-section">
+                    <div class="subgroup-header">
+                        <span>🎥 SCV</span>
+                        <span class="badge badge-ls" id="count-g1-scv">0</span>
+                    </div>
+                    <div class="subgroup-list" id="g1-scv-list" data-group="1" data-area="SCV"></div>
+                </div>
+            </div>
+        </div>
+        <!-- Grupo 2 -->
+        <div class="card group-card">
+            <div class="card-header group-card-header" style="border-top: 3px solid var(--accent-green);">
+                <h3>🟢 Grupo 2</h3>
+                <span class="badge badge-active" id="count-group-2">0</span>
+            </div>
+            <div class="card-body" style="padding: 0;">
+                <div class="subgroup-section">
+                    <div class="subgroup-header">
+                        <span>📡 CCO</span>
+                        <span class="badge badge-cas" id="count-g2-cco">0</span>
+                    </div>
+                    <div class="subgroup-list" id="g2-cco-list" data-group="2" data-area="CCO"></div>
+                </div>
+                <div class="subgroup-section">
+                    <div class="subgroup-header">
+                        <span>🎥 SCV</span>
+                        <span class="badge badge-ls" id="count-g2-scv">0</span>
+                    </div>
+                    <div class="subgroup-list" id="g2-scv-list" data-group="2" data-area="SCV"></div>
+                </div>
+            </div>
+        </div>
+        <!-- Grupo 3 -->
+        <div class="card group-card">
+            <div class="card-header group-card-header" style="border-top: 3px solid var(--accent-purple);">
+                <h3>🟣 Grupo 3</h3>
+                <span class="badge badge-active" id="count-group-3">0</span>
+            </div>
+            <div class="card-body" style="padding: 0;">
+                <div class="subgroup-section">
+                    <div class="subgroup-header">
+                        <span>📡 CCO</span>
+                        <span class="badge badge-cas" id="count-g3-cco">0</span>
+                    </div>
+                    <div class="subgroup-list" id="g3-cco-list" data-group="3" data-area="CCO"></div>
+                </div>
+                <div class="subgroup-section">
+                    <div class="subgroup-header">
+                        <span>🎥 SCV</span>
+                        <span class="badge badge-ls" id="count-g3-scv">0</span>
+                    </div>
+                    <div class="subgroup-list" id="g3-scv-list" data-group="3" data-area="SCV"></div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -105,6 +216,39 @@
         <div class="modal-footer">
             <button class="btn btn-outline" onclick="closePersonnelModal()" id="btn-cancel-worker">Cancelar</button>
             <button class="btn btn-primary" onclick="saveWorker()" id="btn-save-worker">Guardar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Move Worker Modal -->
+<div class="modal-backdrop" id="move-modal-backdrop">
+    <div class="modal" style="max-width: 420px;">
+        <div class="modal-header">
+            <h3>🔄 Mover Trabajador</h3>
+            <button class="modal-close" onclick="closeMoveModal()" id="btn-close-move">✕</button>
+        </div>
+        <div class="modal-body">
+            <p id="move-worker-name" style="color: var(--text-secondary); margin-bottom: 1rem;"></p>
+            <div class="form-group">
+                <label for="move-group">Nuevo Grupo</label>
+                <select class="form-control" id="move-group">
+                    <option value="1">Grupo 1</option>
+                    <option value="2">Grupo 2</option>
+                    <option value="3">Grupo 3</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="move-area">Nuevo Sub-Área</label>
+                <select class="form-control" id="move-area">
+                    <option value="CCO">CCO - Centro de Control</option>
+                    <option value="SCV">SCV - Sala de Video</option>
+                </select>
+            </div>
+            <input type="hidden" id="move-worker-id">
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeMoveModal()" id="btn-cancel-move">Cancelar</button>
+            <button class="btn btn-primary" onclick="executeMoveWorker()" id="btn-execute-move">Mover</button>
         </div>
     </div>
 </div>

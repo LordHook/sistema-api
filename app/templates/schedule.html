@@ -23,6 +23,26 @@
 {% endblock %}
 
 {% block content %}
+<!-- Group Filter Tabs -->
+<div class="group-filter-tabs mb-2" id="group-filter-tabs">
+    <button class="group-tab active" data-group="all" onclick="filterByGroup('all')" id="tab-all">
+        📋 Todo el Personal
+    </button>
+    <button class="group-tab" data-group="staff" onclick="filterByGroup('staff')" id="tab-staff">
+        🏛️ Secciones A/B/C
+    </button>
+    <div class="tab-separator"></div>
+    <button class="group-tab group-tab-1" data-group="1" onclick="filterByGroup('1')" id="tab-group-1">
+        🔵 Grupo 1
+    </button>
+    <button class="group-tab group-tab-2" data-group="2" onclick="filterByGroup('2')" id="tab-group-2">
+        🟢 Grupo 2
+    </button>
+    <button class="group-tab group-tab-3" data-group="3" onclick="filterByGroup('3')" id="tab-group-3">
+        🟣 Grupo 3
+    </button>
+</div>
+
 <div class="card">
     <div class="card-body" style="padding: 0.5rem;">
         <div class="schedule-container" id="schedule-container">
