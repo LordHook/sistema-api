@@ -1,4 +1,4 @@
-/* ===== Personnel Management ===== */
+﻿/* ===== Personnel Management ===== */
 
 let currentView = 'table';
 let allWorkers = [];
@@ -6,7 +6,7 @@ let allWorkers = [];
 document.addEventListener('DOMContentLoaded', loadPersonnel);
 
 const AREA_OPTIONS = {
-    'A': [{ value: 'Jefatura', label: 'Jefatura CEMOVI' }],
+    'A': [{ value: 'Jefatura', label: 'Jefatura CCO' }],
     'B': [{ value: 'Gestion_Video', label: 'Gestión de Video' }],
     'C': [{ value: 'Supervisores', label: 'Supervisores' }],
     'D': [
@@ -283,3 +283,4 @@ async function deleteWorker(id) {
         // handled
     }
 }
+

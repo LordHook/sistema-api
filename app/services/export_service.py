@@ -1,4 +1,4 @@
-"""Servicio de exportación a Excel y PDF."""
+﻿"""Servicio de exportación a Excel y PDF."""
 import io
 import calendar
 from datetime import date
@@ -59,7 +59,7 @@ def export_schedule_excel(year, month):
     # Title
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=grid['num_days'] + 4)
     title_cell = ws['A1']
-    title_cell.value = f'ROL DE SERVICIO - CEMOVI - {grid["month_name"].upper()} {year}'
+    title_cell.value = f'ROL DE SERVICIO - CCO - {grid["month_name"].upper()} {year}'
     title_cell.font = title_font
     title_cell.alignment = Alignment(horizontal='center', vertical='center')
     ws.row_dimensions[1].height = 30
@@ -187,7 +187,7 @@ def export_schedule_pdf(year, month):
 
     # Title
     title = Paragraph(
-        f'<b>ROL DE SERVICIO - CEMOVI - {grid["month_name"].upper()} {year}</b>',
+        f'<b>ROL DE SERVICIO - CCO - {grid["month_name"].upper()} {year}</b>',
         styles['Title']
     )
     elements.append(title)
@@ -304,3 +304,4 @@ def export_audit_excel(filters=None):
     wb.save(output)
     output.seek(0)
     return output
+

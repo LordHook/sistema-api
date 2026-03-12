@@ -1,4 +1,4 @@
-from flask import Blueprint, request, send_file
+﻿from flask import Blueprint, request, send_file
 from flask_login import login_required, current_user
 from datetime import date
 from app.services.export_service import (
@@ -74,5 +74,6 @@ def export_audit():
         output,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
-        download_name='Registro_Auditoria_CEMOVI.xlsx',
+        download_name='Registro_Auditoria_CCO.xlsx',
     )
+

@@ -1,4 +1,4 @@
-import os
+﻿import os
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 
@@ -15,7 +15,7 @@ class DevelopmentConfig(Config):
     DEBUG = True
     SQLALCHEMY_DATABASE_URI = os.environ.get(
         'DATABASE_URL',
-        'sqlite:///' + os.path.join(os.path.dirname(basedir), 'instance', 'cemovi.db')
+        'sqlite:///' + os.path.join(os.path.dirname(basedir), 'instance', 'cco.db')
     )
 
 
@@ -35,3 +35,4 @@ config_map = {
     'production': ProductionConfig,
     'testing': TestingConfig,
 }
+

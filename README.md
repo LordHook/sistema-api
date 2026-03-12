@@ -1,4 +1,4 @@
-# CEMOVI - Sistema de Gestión de Horarios y Control de Asistencia
+﻿# CCO - Sistema de Gestión de Horarios y Control de Asistencia
 
 Sistema web para generar roles de servicio mensuales y controlar la asistencia diaria del Centro de Monitoreo y Videovigilancia.
 
@@ -38,13 +38,13 @@ sudo dnf install python3.12 python3.12-pip python3.12-devel postgresql-server po
 ```bash
 sudo postgresql-setup --initdb
 sudo systemctl enable --now postgresql
-sudo -u postgres createuser cemovi_user -P
-sudo -u postgres createdb cemovi_db -O cemovi_user
+sudo -u postgres createuser cco_user -P
+sudo -u postgres createdb cco_db -O cco_user
 ```
 
 ### 3. Configurar la aplicación
 ```bash
-cd /opt/cemovi
+cd /opt/cco
 python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -55,16 +55,16 @@ cp .env.example .env
 ```
 
 ### 4. Configurar Gunicorn como servicio
-Crear `/etc/systemd/system/cemovi.service`:
+Crear `/etc/systemd/system/cco.service`:
 ```ini
 [Unit]
-Description=CEMOVI Flask App
+Description=CCO Flask App
 After=network.target postgresql.service
 
 [Service]
-User=cemovi
-WorkingDirectory=/opt/cemovi
-ExecStart=/opt/cemovi/.venv/bin/gunicorn -w 4 -b 127.0.0.1:5000 run:app
+User=cco
+WorkingDirectory=/opt/cco
+ExecStart=/opt/cco/.venv/bin/gunicorn -w 4 -b 127.0.0.1:5000 run:app
 Restart=always
 
 [Install]
@@ -72,14 +72,14 @@ WantedBy=multi-user.target
 ```
 
 ```bash
-sudo systemctl enable --now cemovi
+sudo systemctl enable --now cco
 ```
 
 ### 5. Configurar Nginx
 ```nginx
 server {
     listen 80;
-    server_name cemovi.tudominio.com;
+    server_name cco.tudominio.com;
 
     location / {
         proxy_pass http://127.0.0.1:5000;
@@ -88,7 +88,7 @@ server {
     }
 
     location /static/ {
-        alias /opt/cemovi/app/static/;
+        alias /opt/cco/app/static/;
     }
 }
 ```
@@ -110,3 +110,4 @@ APi/
 ├── run.py
 └── README.md
 ```
+

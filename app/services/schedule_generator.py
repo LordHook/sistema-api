@@ -1,4 +1,4 @@
-"""
+﻿"""
 Algoritmo de Generación de Horarios (Rol de Servicio)
 
 Reglas:
@@ -323,7 +323,7 @@ def _build_sections(workers, entry_map, num_days, group_filter=None):
 
     # Normal view (all or staff)
     section_config = [
-        ('A', 'Jefatura CEMOVI, Planta Externa, Encargados y Coordinadores', None),
+        ('A', 'Jefatura CCO, Planta Externa, Encargados y Coordinadores', None),
         ('B', 'Área de Gestión de Video', None),
         ('C', 'Supervisores', None),
     ]
@@ -396,3 +396,4 @@ def _build_worker_rows(workers, entry_map, num_days):
             'days': days,
         })
     return {'rows': rows}
+

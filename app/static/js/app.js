@@ -1,4 +1,4 @@
-/* ===== CEMOVI - Global Utilities ===== */
+﻿/* ===== CCO - Global Utilities ===== */
 
 function showFlash(message, type = 'success') {
     const container = document.getElementById('flash-container');
@@ -104,3 +104,4 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => msg.remove(), 4000);
     });
 });
+
