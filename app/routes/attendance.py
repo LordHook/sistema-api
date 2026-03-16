@@ -5,6 +5,8 @@ from app.extensions import db
 from app.models.attendance import AttendanceRecord
 from app.models.audit import AuditLog
 from app.services.attendance_service import get_attendance_for_date, save_attendance
+from app.services.schedule_generator import get_schedule_grid
+from sqlalchemy import extract
 
 attendance_bp = Blueprint('attendance', __name__)
 
@@ -22,6 +24,51 @@ def get_attendance():
     target_date = date.fromisoformat(date_str) if date_str else date.today()
     data = get_attendance_for_date(target_date)
     return jsonify({'date': target_date.isoformat(), 'records': data})
+
+
+@attendance_bp.route('/api/attendance/grid')
+@login_required
+def get_attendance_grid():
+    year = request.args.get('year', date.today().year, type=int)
+    month = request.args.get('month', date.today().month, type=int)
+    
+    # Apply supervisor group restriction
+    if current_user.role == 'supervisor':
+        group = str(current_user.assigned_group) if current_user.assigned_group else request.args.get('group', '1')
+    else:
+        group = request.args.get('group', None)
+
+    grid = get_schedule_grid(year, month, group_filter=group, user_role=current_user.role)
+
+    # Fetch all attendance records for this month
+    records = AttendanceRecord.query.filter(
+        extract('year', AttendanceRecord.attendance_date) == year,
+        extract('month', AttendanceRecord.attendance_date) == month
+    ).all()
+    
+    # Map by (worker_id, day)
+    att_map = {(r.worker_id, r.attendance_date.day): r for r in records}
+
+    # Inject into grid
+    for section in grid.get('sections', []):
+        for grp in section.get('groups', []):
+            for row in grp.get('rows', []):
+                w_id = row['worker']['id']
+                for day_data in row.get('days', []):
+                    d = day_data['day']
+                    record = att_map.get((w_id, d))
+                    if record:
+                        day_data['attendance_status'] = record.status
+                        day_data['attendance_id'] = record.id
+                    else:
+                        day_data['attendance_status'] = None
+                        day_data['attendance_id'] = None
+
+    # Pass the current day for UI logic
+    grid['current_day'] = date.today().day if (date.today().year == year and date.today().month == month) else None
+    grid['is_admin'] = current_user.is_admin
+
+    return jsonify(grid)
 
 
 @attendance_bp.route('/api/attendance', methods=['POST'])

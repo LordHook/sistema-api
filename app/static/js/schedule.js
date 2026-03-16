@@ -49,6 +49,23 @@ async function loadSchedule() {
     }
 }
 
+let currentBrush = '';
+let isPainting = false;
+
+/* ===== BRUSH PALETTE ===== */
+function setBrush(shift) {
+    currentBrush = shift;
+    document.querySelectorAll('.brush-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelector(`.brush-btn[data-shift="${shift}"]`).classList.add('active');
+    
+    // Toggle painting visual state on grid
+    const grid = document.querySelector('.schedule-grid');
+    if (grid) {
+        if (shift) grid.classList.add('painting-mode');
+        else grid.classList.remove('painting-mode');
+    }
+}
+
 /* ===== RENDER SCHEDULE GRID ===== */
 function renderScheduleGrid(grid) {
     const container = document.getElementById('schedule-container');
@@ -64,7 +81,7 @@ function renderScheduleGrid(grid) {
         return;
     }
 
-    let html = '<table class="schedule-grid"><thead><tr>';
+    let html = `<table class="schedule-grid ${currentBrush ? 'painting-mode' : ''}"><thead><tr>`;
     html += '<th class="col-num">N°</th>';
     html += '<th class="col-rl">R.L</th>';
     html += '<th class="col-name">Apellidos y Nombres</th>';
@@ -97,10 +114,17 @@ function renderScheduleGrid(grid) {
 
                 row.days.forEach(d => {
                     const shiftClass = d.shift ? `shift-${d.shift}` : '';
-                    const clickHandler = IS_ADMIN && d.entry_id && d.shift !== 'R'
-                        ? `onclick="openShiftModal(${d.entry_id}, '${w.name}', ${d.day}, '${d.shift}')"`
-                        : '';
-                    html += `<td class="cell-shift ${shiftClass}" ${clickHandler}>${d.shift}</td>`;
+                    let handlers = '';
+                    if (IS_ADMIN && d.entry_id && d.shift !== 'R' && w.status !== 'inactivo') {
+                        handlers = `
+                            onmousedown="startPainting(${d.entry_id}, this)"
+                            onmouseenter="continuePainting(${d.entry_id}, this)"
+                            onclick="handleCellClick(${d.entry_id}, '${w.name}', ${d.day}, '${d.shift}', this)"
+                        `;
+                    } else if (IS_ADMIN && d.entry_id && d.shift === 'R') {
+                         handlers = `onclick="handleCellClick(${d.entry_id}, '${w.name}', ${d.day}, '${d.shift}', this)"`;
+                    }
+                    html += `<td class="cell-shift ${shiftClass}" ${handlers} data-entry="${d.entry_id}">${d.shift}</td>`;
                 });
 
                 html += '</tr>';
@@ -112,6 +136,57 @@ function renderScheduleGrid(grid) {
     container.innerHTML = html;
 }
 
+/* ===== PAINTING / EDITING LOGIC ===== */
+document.addEventListener('mouseup', () => { isPainting = false; });
+
+async function silentUpdateShift(entryId, newShift, cellElement) {
+    if (!newShift) return;
+    
+    // Optimistic UI update
+    const oldShift = cellElement.textContent;
+    cellElement.className = `cell-shift shift-${newShift}`;
+    cellElement.textContent = newShift;
+    cellElement.classList.add('shift-painting'); // small pulse effect
+    setTimeout(() => cellElement.classList.remove('shift-painting'), 600);
+
+    try {
+        await apiFetch(`/api/schedule/entry/${entryId}`, {
+            method: 'PUT',
+            body: JSON.stringify({ shift_code: newShift }),
+        });
+        
+        // If it was an 'R', it might affect other days, reloading is safer but 
+        // for speed we won't reload automatically unless requested.
+        if (newShift === 'R') {
+            loadSchedule(); // Real reload to get cascaded R's
+        }
+    } catch (e) {
+        // Revert on error
+        cellElement.className = `cell-shift shift-${oldShift}`;
+        cellElement.textContent = oldShift;
+        showFlash('Error al guardar cambio', 'error');
+    }
+}
+
+function startPainting(entryId, cellElement) {
+    if (!currentBrush) return;
+    isPainting = true;
+    silentUpdateShift(entryId, currentBrush, cellElement);
+}
+
+function continuePainting(entryId, cellElement) {
+    if (!isPainting || !currentBrush) return;
+    silentUpdateShift(entryId, currentBrush, cellElement);
+}
+
+function handleCellClick(entryId, workerName, day, currentShift, cellElement) {
+    // If brush is active, startPainting already handled it via mousedown.
+    if (currentBrush) return;
+    
+    // Fallback to modal if no brush is selected
+    openShiftModal(entryId, workerName, day, currentShift);
+}
+
 function _getGroupLabel(filter) {
     if (filter === 'staff') return 'Secciones A/B/C';
     if (filter === '1') return 'Grupo 1';
@@ -121,17 +196,23 @@ function _getGroupLabel(filter) {
 }
 
 /* ===== GENERATE SCHEDULE ===== */
-async function generateSchedule() {
+async function generateSchedule(projectYear = false) {
     const groupLabel = _getGroupLabel(currentGroupFilter);
     const isGroupSpecific = ['1', '2', '3'].includes(currentGroupFilter);
 
-    const msg = isGroupSpecific
-        ? `¿Generar el horario solo para ${groupLabel} en ${currentMonth}/${currentYear}? La distribución de descansos se calculará con los integrantes de este grupo.`
+    let msg = isGroupSpecific
+        ? `¿Generar el horario solo para ${groupLabel} en ${currentMonth}/${currentYear}?`
         : `¿Generar el horario de todo el personal para ${currentMonth}/${currentYear}? Esto reemplazará las entradas auto-generadas existentes.`;
+
+    if (projectYear) {
+        msg = isGroupSpecific
+            ? `¿Proyectar el horario para ${groupLabel} desde ${currentMonth}/${currentYear} hasta diciembre?`
+            : `¿Proyectar el horario de todo el personal desde ${currentMonth}/${currentYear} hasta el final del año? Esto tomará unos segundos.`;
+    }
 
     if (!confirm(msg)) return;
 
-    const body = { year: currentYear, month: currentMonth };
+    const body = { year: currentYear, month: currentMonth, project_year: projectYear };
     if (isGroupSpecific) {
         body.group = currentGroupFilter;
     }

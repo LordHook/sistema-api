@@ -1,4 +1,4 @@
-﻿"""
+"""
 Algoritmo de Generación de Horarios (Rol de Servicio)
 
 Reglas:
@@ -10,7 +10,7 @@ Reglas:
 - Bloqueo por renuncia: si fecha >= resignation_date → 'R'
 """
 import calendar
-from datetime import date
+from datetime import date, timedelta
 from app.extensions import db
 from app.models.schedule import ScheduleEntry
 from app.models.worker import Worker
@@ -87,7 +87,7 @@ def generate_group_schedule(year, month, group_number):
 
 
 def _get_relevant_workers(year, month):
-    """Get active workers and those who resigned during this month."""
+    """Get active workers, those who resigned during this month, and filtering by start_date."""
     workers = Worker.query.filter_by(status='activo').order_by(Worker.order_number).all()
     resigned_this_month = Worker.query.filter(
         Worker.status == 'inactivo',
@@ -96,7 +96,18 @@ def _get_relevant_workers(year, month):
         db.extract('month', Worker.resignation_date) == month,
     ).order_by(Worker.order_number).all()
 
-    return workers + [w for w in resigned_this_month if w not in workers]
+    # Combinar
+    all_workers = workers + [w for w in resigned_this_month if w not in workers]
+    
+    # Filtrar ingresos futuros: si la start_date es de un mes futuro, no listarlo
+    filtered_workers = []
+    for w in all_workers:
+        if w.start_date:
+            if w.start_date.year > year or (w.start_date.year == year and w.start_date.month > month):
+                continue # No ha ingresado en este mes ni antes
+        filtered_workers.append(w)
+        
+    return filtered_workers
 
 
 def _generate_section_d(d_workers, year, month, num_days):
@@ -123,116 +134,142 @@ def _generate_section_d(d_workers, year, month, num_days):
 
 
 def _generate_fixed_shift_section(workers, year, month, num_days, default_shift):
-    """Secciones A/B/C: turno fijo, solo rotan descansos."""
+    """Secciones A/B/C: turno fijo. Sección A rige sus descansos fijos."""
     entries = []
-    total_workers = len(workers)
+    
+    # Separar Sección A de B y C
+    sec_a = [w for w in workers if w.section == 'A']
+    sec_others = [w for w in workers if w.section != 'A']
+    
+    if sec_a:
+        entries.extend(_generate_sequential_schedule(sec_a, year, month, num_days, [default_shift], 0, is_fixed=True, section_a_rules=True))
+    
+    if sec_others:
+        entries.extend(_generate_sequential_schedule(sec_others, year, month, num_days, [default_shift], 0, is_fixed=True, section_a_rules=False))
+        
+    return entries
+
+
+def _generate_rotating_section(workers, year, month, num_days, shift_rotation, base_shift_index):
+    """Sección D: turnos rotativos M→T→N con descansos escalonados."""
+    return _generate_sequential_schedule(workers, year, month, num_days, shift_rotation, base_shift_index, is_fixed=False)
+
+
+def _generate_sequential_schedule(workers, year, month, num_days, shift_rotation, base_shift_index, is_fixed=False, section_a_rules=False):
+    """
+    Generates deterministic staggered schedule across months using DB history.
+    If section_a_rules is True, ignores staggered history and STRICTLY assigns 'M' on Mon-Fri and 'D' on Sat-Sun.
+    """
+    entries = []
 
     for idx, worker in enumerate(workers):
-        rest_day_start = (idx % 7) + 1
+        # 1. Determine anchor state from previous days (skip for Sec A)
+        last_date_checked = date(year, month, 1) - timedelta(days=1)
+        prev_entries = []
+        if not section_a_rules:
+            prev_entries = ScheduleEntry.query.filter(
+                ScheduleEntry.worker_id == worker.id,
+                db.func.date(db.cast(ScheduleEntry.year, db.String) + '-' + 
+                             db.func.lpad(db.cast(ScheduleEntry.month, db.String), 2, '0') + '-' + 
+                             db.func.lpad(db.cast(ScheduleEntry.day, db.String), 2, '0')) <= last_date_checked
+            ).order_by(
+                ScheduleEntry.year.desc(), 
+                ScheduleEntry.month.desc(), 
+                ScheduleEntry.day.desc()
+            ).limit(14).all()
 
+        last_rest_date = None
+        current_shift_index = base_shift_index
+        pending_extra_rest = False
+
+        if prev_entries:
+            work_shifts = [e.shift_code for e in prev_entries if e.shift_code in shift_rotation]
+            if work_shifts:
+                most_recent_shift = work_shifts[0]
+                if most_recent_shift in shift_rotation:
+                    current_shift_index = shift_rotation.index(most_recent_shift)
+            
+            # Check the last rest
+            if prev_entries[0].shift_code == 'D' and date(prev_entries[0].year, prev_entries[0].month, prev_entries[0].day).weekday() == 6:
+                pending_extra_rest = True
+                # Logical anchor was before Sunday, pretend anchor was an invisible start
+                last_rest_date = date(prev_entries[0].year, prev_entries[0].month, prev_entries[0].day) - timedelta(days=8)
+            else:
+                for e in prev_entries:
+                    if e.shift_code == 'D':
+                        last_rest_date = date(e.year, e.month, e.day)
+                        break
+
+        # If no previous entries, fake an initial anchor date based on their order
+        if not last_rest_date:
+            rest_day_start = (idx % 7) + 1
+            last_rest_date = date(year, month, 1) - timedelta(days = 8 - rest_day_start)
+            
+        # 2. Sequence through the month
         for day in range(1, num_days + 1):
             current_date = date(year, month, day)
-            shift = _determine_shift(
-                worker, current_date, day, rest_day_start,
-                default_shift, total_workers, idx
-            )
+
+            # Check if this is a manually set entry (vacation, compensated)
+            existing = ScheduleEntry.query.filter_by(
+                worker_id=worker.id, year=year, month=month, day=day, is_auto_generated=False
+            ).first()
+            if existing: # do not touch manual entries
+                continue
+
+            # Check start_date mid-month entry
+            if worker.start_date and current_date < worker.start_date:
+                entries.append(ScheduleEntry(
+                    worker_id=worker.id, year=year, month=month, day=day,
+                    shift_code='NI', is_auto_generated=True
+                ))
+                continue
+
+            # Check resignation
+            if worker.resignation_date and current_date >= worker.resignation_date:
+                entries.append(ScheduleEntry(
+                    worker_id=worker.id, year=year, month=month, day=day,
+                    shift_code='R', is_auto_generated=True
+                ))
+                continue
+
+            # Process state machine
+            if section_a_rules:
+                if current_date.weekday() >= 5: # 5=Sat, 6=Sun
+                    shift = 'D'
+                else:
+                    shift = shift_rotation[0] # Default shift (typically 'M')
+            elif pending_extra_rest:
+                # Give Monday as requested
+                shift = 'D'
+                pending_extra_rest = False
+                last_rest_date = current_date
+                if not is_fixed:
+                    current_shift_index = (current_shift_index + 1) % len(shift_rotation)
+            else:
+                days_since_rest = (current_date - last_rest_date).days
+                if days_since_rest >= 8: # Hit next rest day
+                    shift = 'D'
+                    if current_date.weekday() == 6: # Sunday
+                        pending_extra_rest = True
+                    else:
+                        last_rest_date = current_date
+                        if not is_fixed:
+                            current_shift_index = (current_shift_index + 1) % len(shift_rotation)
+                else:
+                    shift = shift_rotation[current_shift_index] if not is_fixed else shift_rotation[0]
+
             entries.append(ScheduleEntry(
-                worker_id=worker.id,
-                year=year, month=month, day=day,
-                shift_code=shift,
-                is_auto_generated=True,
+                worker_id=worker.id, year=year, month=month, day=day,
+                shift_code=shift, is_auto_generated=True
             ))
 
     return entries
 
 
-def _generate_rotating_section(workers, year, month, num_days,
-                                shift_rotation, base_shift_index):
-    """Sección D: turnos rotativos M→T→N con descansos escalonados.
-    Distribución equitativa: ~len(workers)/7 descansan por día.
-    """
-    entries = []
-    total_workers = len(workers)
-
-    for idx, worker in enumerate(workers):
-        rest_day_start = (idx % 7) + 1
-
-        for day in range(1, num_days + 1):
-            current_date = date(year, month, day)
-
-            # Determine which week we're in (0-based)
-            week_num = (day - 1) // 7
-            current_shift_index = (base_shift_index + week_num) % len(shift_rotation)
-            work_shift = shift_rotation[current_shift_index]
-
-            shift = _determine_shift(
-                worker, current_date, day, rest_day_start,
-                work_shift, total_workers, idx
-            )
-            entries.append(ScheduleEntry(
-                worker_id=worker.id,
-                year=year, month=month, day=day,
-                shift_code=shift,
-                is_auto_generated=True,
-            ))
-
-    return entries
-
-
-def _determine_shift(worker, current_date, day, rest_day_start,
-                     work_shift, total_workers, worker_index):
-    """Determina el turno para un trabajador en un día dado."""
-    # Check resignation
-    if worker.resignation_date and current_date >= worker.resignation_date:
-        return 'R'
-
-    # Check if this is a manually set entry (vacation, compensated)
-    existing = ScheduleEntry.query.filter_by(
-        worker_id=worker.id,
-        year=current_date.year,
-        month=current_date.month,
-        day=day,
-        is_auto_generated=False,
-    ).first()
-    if existing:
-        return existing.shift_code
-
-    # Calculate rest days using the staggered rotation algorithm
-    if _is_rest_day(day, rest_day_start, current_date):
-        return 'D'
-
-    return work_shift
-
-
-def _is_rest_day(day, rest_day_start, current_date):
-    """
-    Determines if a given day is a rest day.
-    Rest advances +1 day each week (every 8 days from last rest).
-    When crossing Sunday→Monday, grant 2 consecutive rest days.
-    """
-    days_since_start = day - rest_day_start
-
-    if days_since_start < 0:
-        return False
-
-    # Every 8 days is a rest day
-    if days_since_start % 8 == 0:
-        return True
-
-    # Check for the "double rest" when crossing Sun→Mon
-    if days_since_start > 0 and (days_since_start - 1) % 8 == 0:
-        prev_day = day - 1
-        if prev_day >= 1:
-            prev_date = date(current_date.year, current_date.month, prev_day)
-            if prev_date.weekday() == 6:  # Sunday
-                return True
-
-    return False
-
-
-def get_schedule_grid(year, month, group_filter=None):
+def get_schedule_grid(year, month, group_filter=None, user_role='admin'):
     """Returns the schedule data structured for the grid view.
     group_filter: 'all', 'staff', '1', '2', '3', or None
+    user_role: 'admin', 'supervisor', etc to apply visibility rules.
     """
     num_days = calendar.monthrange(year, month)[1]
 
@@ -257,7 +294,11 @@ def get_schedule_grid(year, month, group_filter=None):
         elif group_filter.isdigit():
             gnum = int(group_filter)
             relevant_workers = [w for w in relevant_workers
-                                if w.section == 'D' and (w.group_number or 1) == gnum]
+                                if (w.section == 'D' and (w.group_number or 1) == gnum) or w.section == 'B']
+
+    # Security Rules: Hide Section A from Supervisors
+    if user_role == 'supervisor':
+        relevant_workers = [w for w in relevant_workers if w.section != 'A']
 
     entries = ScheduleEntry.query.filter_by(year=year, month=month).all()
     entry_map = {}
@@ -293,9 +334,20 @@ def _build_sections(workers, entry_map, num_days, group_filter=None):
     """Organizes workers into display sections."""
     sections = []
 
-    # If filtering by a specific group, only show section D
-    if group_filter and group_filter.isdigit() if group_filter else False:
+    # If filtering by a specific group, only show section D and section B
+    if group_filter and group_filter.isdigit():
         gnum = int(group_filter)
+        
+        # Sec B
+        sec_b = [w for w in workers if w.section == 'B']
+        if sec_b:
+            sections.append({
+                'key': 'B',
+                'name': 'Área de Gestión de Video',
+                'groups': [_build_worker_rows(sec_b, entry_map, num_days)],
+            })
+
+        # Sec D
         d_workers = [w for w in workers if w.section == 'D']
         if d_workers:
             groups_data = {'CCO': [], 'SCV': []}

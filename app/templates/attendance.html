@@ -1,4 +1,4 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 
 {% block title %}Control de Asistencia - CCO{% endblock %}
 {% block page_title %}Control de Asistencia{% endblock %}
@@ -17,28 +17,59 @@
 {% endblock %}
 
 {% block content %}
-<div class="card">
-    <div class="card-header">
-        <h3>📋 Asistencia del <span id="attendance-date-label">-</span></h3>
-        <div class="d-flex gap-1">
-            <span class="badge badge-active" id="count-asistio">✅ 0</span>
-            <span class="badge badge-inactive" id="count-falto">❌ 0</span>
-            <span class="badge badge-cas" id="count-tardanza">⏰ 0</span>
+<div class="card mb-3">
+    <div class="card-header d-flex justify-between align-center">
+        <h3>📋 Asistencia del Mes</h3>
+        <div class="d-flex gap-1 align-center">
+            <button class="btn btn-outline" onclick="changeMonth(-1)">◀</button>
+            <span id="current-month-label" style="font-weight: 600; min-width: 140px; text-align: center;">-</span>
+            <button class="btn btn-outline" onclick="changeMonth(1)">▶</button>
         </div>
     </div>
-    <div class="card-body" style="padding: 0.75rem;">
-        <!-- Header Row -->
-        <div class="attendance-row" style="background: var(--bg-tertiary); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary);">
-            <div>N°</div>
-            <div>Turno</div>
-            <div>Trabajador</div>
-            <div>Estado</div>
-            <div>Validación</div>
+</div>
+
+<div class="group-filter-tabs mb-2" id="group-filter-tabs">
+    <button class="group-tab active" data-group="all" onclick="filterByGroup('all')" id="tab-all">
+        🏢 Todo el Personal
+    </button>
+    <button class="group-tab" data-group="1" onclick="filterByGroup('1')" id="tab-1">
+        🛡️ Grupo 1
+    </button>
+    <button class="group-tab" data-group="2" onclick="filterByGroup('2')" id="tab-2">
+        🛡️ Grupo 2
+    </button>
+    <button class="group-tab" data-group="3" onclick="filterByGroup('3')" id="tab-3">
+        🛡️ Grupo 3
+    </button>
+</div>
+
+<div class="card p-0">
+    <div class="schedule-container" id="attendance-container">
+        <div class="loading-overlay" id="attendance-loading">
+            <div class="spinner"></div>
+            <span>Cargando asistencia mensual...</span>
         </div>
-        <div class="attendance-grid" id="attendance-grid">
-            <div class="loading-overlay" id="attendance-loading">
-                <div class="spinner"></div>
-                <span>Cargando asistencia...</span>
+    </div>
+</div>
+
+<!-- Modal para Mover/Validar Asistencia -->
+<div class="modal-backdrop" id="attendance-modal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3 id="modal-attendance-title">Marcar Asistencia</h3>
+            <button class="btn btn-outline" onclick="closeAttendanceModal()" style="border:none; padding: 0.2rem 0.6rem;">✖</button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="modal-worker-id">
+            <input type="hidden" id="modal-day">
+            
+            <p>Trabajador: <strong id="modal-worker-name"></strong></p>
+            <p>Día del mes: <strong id="modal-day-label"></strong></p>
+            
+            <div class="d-flex gap-1 mt-3 justify-center" id="modal-status-buttons">
+                <button class="status-btn asistio px-4 py-2" onclick="saveStatus('asistio')">✅ Asistió</button>
+                <button class="status-btn falto px-4 py-2" onclick="saveStatus('falto')">❌ Faltó</button>
+                <button class="status-btn tardanza px-4 py-2" onclick="saveStatus('tardanza')">⏰ Tardanza</button>
             </div>
         </div>
     </div>

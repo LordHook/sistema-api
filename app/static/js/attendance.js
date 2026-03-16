@@ -1,148 +1,177 @@
-/* ===== Attendance Control ===== */
+/* ===== Attendance Grid Control ===== */
+let currentYear = new Date().getFullYear();
+let currentMonth = new Date().getMonth() + 1; // 1-12
+let currentGroupFilter = 'all'; 
 
-let attendanceData = [];
+// Global state
+let currentDayBackend = null;
+let isAdmin = false;
 
 document.addEventListener('DOMContentLoaded', () => {
-    const dateInput = document.getElementById('attendance-date');
-    dateInput.value = new Date().toISOString().split('T')[0];
-    loadAttendance();
+    loadAttendanceGrid();
 });
 
-async function loadAttendance() {
-    const dateInput = document.getElementById('attendance-date');
-    const dateStr = dateInput.value;
-    const dateLabel = document.getElementById('attendance-date-label');
+function changeMonth(delta) {
+    currentMonth += delta;
+    if (currentMonth > 12) { currentMonth = 1; currentYear++; }
+    else if (currentMonth < 1) { currentMonth = 12; currentYear--; }
+    loadAttendanceGrid();
+}
 
-    const dateObj = new Date(dateStr + 'T00:00:00');
-    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-    dateLabel.textContent = dateObj.toLocaleDateString('es-PE', options);
+function filterByGroup(group) {
+    currentGroupFilter = group;
+    document.querySelectorAll('.group-tab').forEach(t => t.classList.remove('active'));
+    document.getElementById(`tab-${group}`).classList.add('active');
+    loadAttendanceGrid();
+}
 
-    const grid = document.getElementById('attendance-grid');
-    grid.innerHTML = '<div class="loading-overlay"><div class="spinner"></div><span>Cargando...</span></div>';
+async function loadAttendanceGrid() {
+    const container = document.getElementById('attendance-container');
+    container.innerHTML = '<div class="loading-overlay"><div class="spinner"></div><span>Cargando asistencia mensual...</span></div>';
 
     try {
-        const data = await apiFetch(`/api/attendance?date=${dateStr}`);
-        attendanceData = data.records;
-        renderAttendanceGrid(data.records);
-        updateCounts(data.records);
+        const url = `/api/attendance/grid?year=${currentYear}&month=${currentMonth}&group=${currentGroupFilter}`;
+        const grid = await apiFetch(url);
+        
+        // Update labels
+        document.getElementById('current-month-label').textContent = `${grid.month_name} ${grid.year}`;
+        
+        currentDayBackend = grid.current_day; // From backend (only if looking at current month)
+        isAdmin = grid.is_admin;
+        
+        renderGrid(grid);
     } catch (e) {
-        grid.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div><h4>Error al cargar asistencia</h4></div>';
+        container.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><h4>Error al cargar el control de asistencia</h4></div>';
     }
 }
 
-function renderAttendanceGrid(records) {
-    const grid = document.getElementById('attendance-grid');
+function renderGrid(grid) {
+    const container = document.getElementById('attendance-container');
 
-    if (records.length === 0) {
-        grid.innerHTML = `
+    if (!grid.sections || grid.sections.length === 0) {
+        container.innerHTML = `
             <div class="empty-state">
                 <div class="empty-icon">📋</div>
-                <h4>No hay trabajadores programados para este día</h4>
-                <p>Verifica que el horario esté generado</p>
+                <h4>No hay registros de personal para ${grid.month_name}</h4>
+                <p>Verifica que el rol de servicio esté generado</p>
             </div>`;
         return;
     }
 
-    grid.innerHTML = records.map((r, idx) => {
-        const currentStatus = r.attendance ? r.attendance.status : null;
-        const validated = r.attendance ? r.attendance.validated : false;
+    let html = '<table class="schedule-grid attendance-mode"><thead><tr>';
+    html += '<th class="col-num">N°</th>';
+    html += '<th class="col-name">Trabajador</th>';
 
-        const shiftClass = r.shift ? `shift-${r.shift}` : '';
+    grid.day_headers.forEach(dh => {
+        const isToday = (dh.day === currentDayBackend) ? 'border-bottom: 3px solid var(--accent-blue); color: var(--accent-blue);' : '';
+        html += `<th class="${dh.is_weekend ? 'weekend' : ''}" style="${isToday}">${dh.weekday}<br>${dh.day}</th>`;
+    });
+    html += '</tr></thead><tbody>';
 
-        return `
-            <div class="attendance-row" data-worker-id="${r.worker.id}" data-index="${idx}">
-                <div style="font-size:0.8rem;color:var(--text-muted);">${r.worker.order_number}</div>
-                <div>
-                    <span class="legend-color ${shiftClass}" style="width:30px;">${r.shift}</span>
-                </div>
-                <div>
-                    <strong>${r.worker.name}</strong>
-                    <small class="text-muted" style="display:block;font-size:0.75rem;">
-                        ${r.worker.section}${r.worker.group_number ? ' · Grupo ' + r.worker.group_number : ''} · ${r.worker.area}
-                    </small>
-                </div>
-                <div class="attendance-status-btns">
-                    <button class="status-btn asistio ${currentStatus === 'asistio' ? 'active-asistio' : ''}"
-                            onclick="setStatus(${idx}, 'asistio')" id="btn-asistio-${idx}">✅</button>
-                    <button class="status-btn falto ${currentStatus === 'falto' ? 'active-falto' : ''}"
-                            onclick="setStatus(${idx}, 'falto')" id="btn-falto-${idx}">❌</button>
-                    <button class="status-btn tardanza ${currentStatus === 'tardanza' ? 'active-tardanza' : ''}"
-                            onclick="setStatus(${idx}, 'tardanza')" id="btn-tardanza-${idx}">⏰</button>
-                </div>
-                <div>
-                    ${validated
-                        ? '<span class="badge badge-validated">✓ Validado</span>'
-                        : r.attendance && r.attendance.id
-                            ? `<button class="btn btn-outline btn-sm" onclick="validateRecord(${r.attendance.id})" id="btn-validate-${idx}">Validar</button>`
-                            : '<span class="text-muted" style="font-size:0.75rem;">Pendiente</span>'
+    grid.sections.forEach(section => {
+        html += `<tr><td class="section-header" colspan="${grid.num_days + 2}">
+            SECCIÓN ${section.key}: ${section.name}</td></tr>`;
+
+        section.groups.forEach(group => {
+            if (group.label) {
+                html += `<tr><td class="group-header" colspan="${grid.num_days + 2}">
+                    ${group.label}</td></tr>`;
+            }
+
+            const rows = group.rows || [];
+            rows.forEach(row => {
+                const w = row.worker;
+                let nameStyle = w.status === 'inactivo' ? 'color:var(--accent-red);text-decoration:line-through;' : '';
+                
+                html += '<tr>';
+                html += `<td style="font-size:0.75rem;color:var(--text-muted);">${w.order_number}</td>`;
+                html += `<td class="cell-name" style="${nameStyle}" title="${w.name}">${w.name}</td>`;
+
+                row.days.forEach(d => {
+                    const status = d.attendance_status; // 'asistio', 'falto', 'tardanza', null
+                    const shift = d.shift;
+                    
+                    let bgClass = '';
+                    let iconHtml = '';
+                    
+                    if (status === 'asistio') { bgClass = 'bg-asistio'; iconHtml = '✅'; }
+                    else if (status === 'falto') { bgClass = 'bg-falto'; iconHtml = '❌'; }
+                    else if (status === 'tardanza') { bgClass = 'bg-tardanza'; iconHtml = '⏰'; }
+                    
+                    // Base classes for the cell
+                    let cellClasses = `cell-att ${bgClass}`;
+                    if (!status && shift) {
+                         // Subtle hint of the shift if no attendance marked yet
+                         cellClasses += ` shift-${shift}-hint`;
+                         iconHtml = `<span style="opacity: 0.3; font-size: 0.65rem;">${shift}</span>`;
                     }
-                </div>
-            </div>`;
-    }).join('');
-}
+                    if (shift === 'R' || shift === 'NI' || shift === 'D' || shift === 'V' || shift === 'C') {
+                         cellClasses += ` shift-${shift}-hint blocked-cell`;
+                         iconHtml = `<span style="font-size: 0.70rem; font-weight: bold; color: var(--text-muted);">${shift}</span>`;
+                    }
 
-function setStatus(index, status) {
-    // Update local data
-    if (!attendanceData[index].attendance) {
-        attendanceData[index].attendance = { id: null, status: null, validated: false, notes: '' };
-    }
-    attendanceData[index].attendance.status = status;
+                    // Strict Rule Check
+                    const isToday = (d.day === currentDayBackend);
+                    let canEdit = false;
+                    
+                    if (w.status !== 'inactivo' && shift !== 'R' && shift !== 'NI' && shift !== 'D' && shift !== 'V' && shift !== 'C') {
+                        if (isAdmin) canEdit = true;
+                        else if (isToday) canEdit = true;
+                    }
 
-    // Update UI buttons
-    const row = document.querySelector(`[data-index="${index}"]`);
-    row.querySelectorAll('.status-btn').forEach(btn => {
-        btn.className = btn.className.replace(/active-\w+/g, '').trim();
-    });
-    row.querySelector(`.${status}`).classList.add(`active-${status}`);
+                    let clickHandler = '';
+                    if (canEdit) {
+                        cellClasses += ' editable-cell';
+                        if (isToday) cellClasses += ' pulse-today'; // highlight the available column for supervisors
+                        clickHandler = `onclick="openAttendanceModal(${w.id}, '${w.name}', ${d.day})"`;
+                    }
 
-    updateCounts(attendanceData);
-}
+                    html += `<td class="${cellClasses}" ${clickHandler}>${iconHtml}</td>`;
+                });
 
-function updateCounts(records) {
-    const counts = { asistio: 0, falto: 0, tardanza: 0 };
-    records.forEach(r => {
-        if (r.attendance && r.attendance.status) {
-            counts[r.attendance.status] = (counts[r.attendance.status] || 0) + 1;
-        }
-    });
-    document.getElementById('count-asistio').textContent = `✅ ${counts.asistio}`;
-    document.getElementById('count-falto').textContent = `❌ ${counts.falto}`;
-    document.getElementById('count-tardanza').textContent = `⏰ ${counts.tardanza}`;
-}
-
-async function saveAllAttendance() {
-    const dateStr = document.getElementById('attendance-date').value;
-    const records = attendanceData
-        .filter(r => r.attendance && r.attendance.status)
-        .map(r => ({
-            worker_id: r.worker.id,
-            status: r.attendance.status,
-            notes: r.attendance.notes || '',
-        }));
-
-    if (records.length === 0) {
-        showFlash('No hay registros que guardar', 'warning');
-        return;
-    }
-
-    try {
-        await apiFetch('/api/attendance/batch', {
-            method: 'POST',
-            body: JSON.stringify({ date: dateStr, records }),
+                html += '</tr>';
+            });
         });
-        showFlash(`${records.length} registros de asistencia guardados`);
-        loadAttendance();
-    } catch (e) {
-        // handled
-    }
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
 }
 
-async function validateRecord(recordId) {
+/* ===== Modal Logic ===== */
+function openAttendanceModal(workerId, workerName, day) {
+    document.getElementById('modal-worker-id').value = workerId;
+    document.getElementById('modal-day').value = day;
+    document.getElementById('modal-worker-name').textContent = workerName;
+    document.getElementById('modal-day-label').textContent = day;
+    
+    document.getElementById('attendance-modal').classList.add('show');
+}
+
+function closeAttendanceModal() {
+    document.getElementById('attendance-modal').classList.remove('show');
+}
+
+async function saveStatus(status) {
+    const workerId = document.getElementById('modal-worker-id').value;
+    const day = document.getElementById('modal-day').value;
+    
+    // Convert day to standard date for API
+    const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    
     try {
-        await apiFetch(`/api/attendance/${recordId}/validate`, { method: 'PUT' });
-        showFlash('Asistencia validada');
-        loadAttendance();
+        await apiFetch('/api/attendance', {
+            method: 'POST',
+            body: JSON.stringify({
+                worker_id: parseInt(workerId),
+                date: dateStr,
+                status: status,
+                notes: ''
+            })
+        });
+        closeAttendanceModal();
+        loadAttendanceGrid(); // Refresh to show the icon
     } catch (e) {
-        // handled
+        showFlash('Error al guardar asistencia', 'error');
     }
 }

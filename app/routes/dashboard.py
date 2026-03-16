@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, jsonify, request
-from flask_login import login_required
+from flask_login import login_required, current_user
 from datetime import date
 from app.services.attendance_service import get_dashboard_stats
 
@@ -17,5 +17,9 @@ def dashboard():
 def dashboard_stats():
     date_str = request.args.get('date')
     target_date = date.fromisoformat(date_str) if date_str else date.today()
-    stats = get_dashboard_stats(target_date)
+    stats = get_dashboard_stats(
+        target_date, 
+        user_role=current_user.role, 
+        assigned_group=current_user.assigned_group
+    )
     return jsonify(stats)

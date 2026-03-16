@@ -99,7 +99,7 @@ def save_attendance(worker_id, target_date, status, user_id, notes=None):
     return record
 
 
-def get_dashboard_stats(target_date=None):
+def get_dashboard_stats(target_date=None, user_role='admin', assigned_group=None):
     """Get statistics for the dashboard."""
     if target_date is None:
         target_date = date.today()
@@ -107,17 +107,38 @@ def get_dashboard_stats(target_date=None):
     year = target_date.year
     month = target_date.month
 
-    total_active = Worker.query.filter_by(status='activo').count()
+    workers_query = Worker.query.filter_by(status='activo')
+    if user_role == 'supervisor':
+        if assigned_group:
+            # Filter for their specific group or Section B
+            workers_query = workers_query.filter(
+                db.or_(
+                    db.and_(Worker.section == 'D', Worker.group_number == assigned_group),
+                    Worker.section == 'B'
+                )
+            )
+        else:
+            # Fallback if no group assigned
+            workers_query = workers_query.filter(Worker.section == 'B')
+            
+    relevant_worker_ids = [w.id for w in workers_query.all()]
+    total_active = len(relevant_worker_ids)
 
     # Today's attendance
-    today_records = AttendanceRecord.query.filter_by(attendance_date=target_date).all()
+    today_records = AttendanceRecord.query.filter(
+        AttendanceRecord.attendance_date == target_date,
+        AttendanceRecord.worker_id.in_(relevant_worker_ids)
+    ).all()
     attended = sum(1 for r in today_records if r.status == 'asistio')
     absent = sum(1 for r in today_records if r.status == 'falto')
     late = sum(1 for r in today_records if r.status == 'tardanza')
 
     # Count rest/vacation today
-    today_schedules = ScheduleEntry.query.filter_by(
-        year=year, month=month, day=target_date.day
+    today_schedules = ScheduleEntry.query.filter(
+        ScheduleEntry.year == year, 
+        ScheduleEntry.month == month, 
+        ScheduleEntry.day == target_date.day,
+        ScheduleEntry.worker_id.in_(relevant_worker_ids)
     ).all()
     resting = sum(1 for s in today_schedules if s.shift_code == 'D')
     on_vacation = sum(1 for s in today_schedules if s.shift_code == 'V')
@@ -126,9 +147,18 @@ def get_dashboard_stats(target_date=None):
     monthly_records = AttendanceRecord.query.filter(
         db.extract('year', AttendanceRecord.attendance_date) == year,
         db.extract('month', AttendanceRecord.attendance_date) == month,
+        AttendanceRecord.worker_id.in_(relevant_worker_ids)
     ).all()
 
     group_stats = {}
+    
+    # Pre-fill expected groups based on role
+    if user_role == 'supervisor' and assigned_group:
+        group_stats = {
+            f'Grupo {assigned_group}': {'asistio': 0, 'falto': 0, 'tardanza': 0},
+            'B': {'asistio': 0, 'falto': 0, 'tardanza': 0}
+        }
+    
     for r in monthly_records:
         worker = Worker.query.get(r.worker_id)
         if worker:

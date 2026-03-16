@@ -1,4 +1,4 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 
 {% block title %}Rol de Servicio - CCO{% endblock %}
 {% block page_title %}Rol de Servicio{% endblock %}
@@ -11,9 +11,14 @@
     <button class="btn-icon" onclick="changeMonth(1)" id="btn-next-month">▶</button>
 </div>
 {% if current_user.is_admin %}
-<button class="btn btn-success" onclick="generateSchedule()" id="btn-generate-schedule">
-    ⚡ Generar Horario
-</button>
+<div class="d-flex gap-1 align-center">
+    <button class="btn btn-success btn-sm" onclick="generateSchedule(false)" id="btn-generate-schedule">
+        ⚡ Generar Mes Actual
+    </button>
+    <button class="btn btn-primary btn-sm" onclick="generateSchedule(true)" id="btn-generate-schedule-year" style="background-color: var(--accent-indigo); border-color: var(--accent-indigo);">
+        🚀 Proyectar Año
+    </button>
+</div>
 {% endif %}
 <div class="d-flex gap-1">
     <button class="btn btn-outline btn-sm" onclick="exportSchedule('xlsx')" id="btn-export-xlsx">📥 Excel</button>
@@ -23,6 +28,28 @@
 {% endblock %}
 
 {% block content %}
+{% if current_user.is_admin %}
+<div class="card mb-4" style="background-color: var(--bg-tertiary); padding: 0.5rem 1rem; margin-bottom: 1rem;">
+    <div class="d-flex align-center gap-1">
+        <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin-right: 1rem;">Modo Pincel (Edición Rápida):</span>
+        <div class="brush-palette d-flex gap-1">
+            <button class="brush-btn" data-shift="M" onclick="setBrush('M')" style="background: rgba(34, 197, 94, 0.15); border: 1px solid var(--accent-green); color: var(--accent-green); padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold;">M</button>
+            <button class="brush-btn" data-shift="T" onclick="setBrush('T')" style="background: rgba(245, 158, 11, 0.15); border: 1px solid var(--accent-amber); color: var(--accent-amber); padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold;">T</button>
+            <button class="brush-btn" data-shift="N" onclick="setBrush('N')" style="background: rgba(99, 102, 241, 0.15); border: 1px solid var(--accent-indigo); color: var(--accent-indigo); padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold;">N</button>
+            <button class="brush-btn" data-shift="D" onclick="setBrush('D')" style="background: rgba(59, 130, 246, 0.15); border: 1px solid var(--accent-blue); color: var(--accent-blue); padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold;">D</button>
+            <button class="brush-btn" data-shift="V" onclick="setBrush('V')" style="background: rgba(6, 182, 212, 0.15); border: 1px solid var(--accent-cyan); color: var(--accent-cyan); padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold;">V</button>
+            <button class="brush-btn" data-shift="C" onclick="setBrush('C')" style="background: rgba(168, 85, 247, 0.15); border: 1px solid var(--accent-purple); color: var(--accent-purple); padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold;">C</button>
+            <button class="brush-btn" data-shift="R" onclick="setBrush('R')" style="background: rgba(239, 68, 68, 0.15); border: 1px solid var(--accent-red); color: var(--accent-red); padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold;">R</button>
+            <button class="brush-btn active" data-shift="" onclick="setBrush('')" style="background: var(--bg-primary); border: 1px solid var(--border-color); color: var(--text-secondary); padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold; margin-left: 0.5rem;" title="Desactivar Pincel">✖ Apagar</button>
+        </div>
+        <span style="font-size: 0.75rem; color: var(--text-muted); margin-left: auto;">* Selecciona un turno y arrastra sobre las celdas para pintar</span>
+    </div>
+</div>
+<style>
+    .brush-btn.active { box-shadow: 0 0 0 2px var(--text-primary); transform: scale(1.1); }
+</style>
+{% endif %}
+
 <!-- Group Filter Tabs -->
 <div class="group-filter-tabs mb-2" id="group-filter-tabs">
     <button class="group-tab active" data-group="all" onclick="filterByGroup('all')" id="tab-all">

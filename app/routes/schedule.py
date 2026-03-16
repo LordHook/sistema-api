@@ -4,6 +4,7 @@ from datetime import date
 from app.extensions import db
 from app.models.schedule import ScheduleEntry
 from app.models.audit import AuditLog
+from app.models.worker import Worker
 from app.services.schedule_generator import (
     generate_monthly_schedule,
     generate_group_schedule,
@@ -24,8 +25,13 @@ def schedule_page():
 def get_schedule():
     year = request.args.get('year', date.today().year, type=int)
     month = request.args.get('month', date.today().month, type=int)
-    group = request.args.get('group', None)  # 'all', 'staff', '1', '2', '3'
-    grid = get_schedule_grid(year, month, group_filter=group)
+    
+    if current_user.role == 'supervisor':
+        group = str(current_user.assigned_group) if current_user.assigned_group else request.args.get('group', '1')
+    else:
+        group = request.args.get('group', None)  # 'all', 'staff', '1', '2', '3'
+        
+    grid = get_schedule_grid(year, month, group_filter=group, user_role=current_user.role)
     return jsonify(grid)
 
 
@@ -36,27 +42,41 @@ def generate_schedule():
         return jsonify({'error': 'Solo administradores pueden generar horarios'}), 403
 
     data = request.get_json()
-    year = data.get('year', date.today().year)
-    month = data.get('month', date.today().month)
+    start_year = data.get('year', date.today().year)
+    start_month = data.get('month', date.today().month)
     group = data.get('group', None)  # None = all, '1'/'2'/'3' = specific group
+    project_year = data.get('project_year', False)
 
-    if group and group.isdigit():
-        count = generate_group_schedule(year, month, int(group))
-        group_label = f'Grupo {group}'
+    months_to_generate = []
+    if project_year:
+        months_to_generate = [m for m in range(start_month, 13)]
     else:
-        count = generate_monthly_schedule(year, month)
-        group_label = 'todo el personal'
+        months_to_generate = [start_month]
 
+    total_count = 0
+    group_label = ''
+
+    for m in months_to_generate:
+        if group and group.isdigit():
+            count = generate_group_schedule(start_year, m, int(group))
+            group_label = f'Grupo {group}'
+        else:
+            count = generate_monthly_schedule(start_year, m)
+            group_label = 'todo el personal'
+        total_count += count
+
+    mod_label = f"hasta diciembre {start_year}" if project_year else f"en {start_month}/{start_year}"
+    
     AuditLog.log(
         user_id=current_user.id,
         action='schedule_change',
-        details=f'Horario generado para {group_label} en {month}/{year} ({count} entradas)',
+        details=f'Horario generado para {group_label} {mod_label} ({total_count} entradas)',
     )
     db.session.commit()
 
     return jsonify({
-        'message': f'Horario generado exitosamente para {group_label}: {count} entradas creadas',
-        'count': count,
+        'message': f'Horario generado exitosamente para {group_label}: {total_count} entradas creadas',
+        'count': total_count,
     })
 
 
@@ -75,6 +95,24 @@ def update_entry(entry_id):
     if new_shift and new_shift != old_shift:
         entry.shift_code = new_shift
         entry.is_auto_generated = False
+
+        # Handle Resignation special case
+        if new_shift == 'R':
+            worker = Worker.query.get(entry.worker_id)
+            if worker:
+                worker.resignation_date = date(entry.year, entry.month, entry.day)
+            
+            # Auto-fill R to the end of the month
+            subsequent_entries = ScheduleEntry.query.filter(
+                ScheduleEntry.worker_id == entry.worker_id,
+                ScheduleEntry.year == entry.year,
+                ScheduleEntry.month == entry.month,
+                ScheduleEntry.day > entry.day
+            ).all()
+
+            for sub_entry in subsequent_entries:
+                sub_entry.shift_code = 'R'
+                sub_entry.is_auto_generated = True
 
         AuditLog.log(
             user_id=current_user.id,
