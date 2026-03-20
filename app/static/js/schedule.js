@@ -114,17 +114,21 @@ function renderScheduleGrid(grid) {
 
                 row.days.forEach(d => {
                     const shiftClass = d.shift ? `shift-${d.shift}` : '';
-                    let handlers = '';
-                    if (IS_ADMIN && d.entry_id && d.shift !== 'R' && w.status !== 'inactivo') {
-                        handlers = `
-                            onmousedown="startPainting(${d.entry_id}, this)"
-                            onmouseenter="continuePainting(${d.entry_id}, this)"
-                            onclick="handleCellClick(${d.entry_id}, '${w.name}', ${d.day}, '${d.shift}', this)"
-                        `;
-                    } else if (IS_ADMIN && d.entry_id && d.shift === 'R') {
-                         handlers = `onclick="handleCellClick(${d.entry_id}, '${w.name}', ${d.day}, '${d.shift}', this)"`;
+                    let interactData = '';
+                    
+                    if (IS_ADMIN && d.entry_id && w.status !== 'inactivo') {
+                        if (d.shift !== 'R' || (d.shift === 'R')) {
+                            // Only difference is R can be clicked but not painted over unless undone,
+                            // but we'll let delegation logic handle the constraints.
+                            interactData = `data-entry="${d.entry_id}" data-worker-name="${w.name}" data-day="${d.day}" data-shift="${d.shift}" data-allowed="${w.allowed_shifts}" class="cell-shift ${shiftClass} interactive-cell"`;
+                        } else {
+                            interactData = `data-entry="${d.entry_id}" class="cell-shift ${shiftClass}"`;
+                        }
+                    } else {
+                        interactData = `data-entry="${d.entry_id}" class="cell-shift ${shiftClass}"`;
                     }
-                    html += `<td class="cell-shift ${shiftClass}" ${handlers} data-entry="${d.entry_id}">${d.shift}</td>`;
+                    
+                    html += `<td ${interactData}>${d.shift}</td>`;
                 });
 
                 html += '</tr>';
@@ -136,8 +140,51 @@ function renderScheduleGrid(grid) {
     container.innerHTML = html;
 }
 
-/* ===== PAINTING / EDITING LOGIC ===== */
+/* ===== PAINTING / EDITING LOGIC VIA DELEGATION ===== */
 document.addEventListener('mouseup', () => { isPainting = false; });
+
+document.addEventListener('mousedown', (e) => {
+    const cell = e.target.closest('td.interactive-cell');
+    if (!cell) return;
+    
+    const entryId = cell.getAttribute('data-entry');
+    const allowed = cell.getAttribute('data-allowed') || 'M,T,N';
+    const currentShift = cell.getAttribute('data-shift');
+    
+    if (currentShift !== 'R') {
+        startPainting(entryId, allowed, cell);
+    }
+});
+
+document.addEventListener('mouseover', (e) => {
+    if (!isPainting) return;
+    const cell = e.target.closest('td.interactive-cell');
+    if (!cell) return;
+    
+    const entryId = cell.getAttribute('data-entry');
+    const allowed = cell.getAttribute('data-allowed') || 'M,T,N';
+    const currentShift = cell.getAttribute('data-shift');
+    
+    if (currentShift !== 'R') {
+        continuePainting(entryId, allowed, cell);
+    }
+});
+
+document.addEventListener('click', (e) => {
+    const cell = e.target.closest('td.interactive-cell');
+    if (!cell) return;
+    
+    // Ignore clicks if painting is active
+    if (currentBrush) return;
+    
+    const entryId = cell.getAttribute('data-entry');
+    const workerName = cell.getAttribute('data-worker-name');
+    const day = cell.getAttribute('data-day');
+    const shift = cell.getAttribute('data-shift');
+    const allowed = cell.getAttribute('data-allowed') || 'M,T,N';
+    
+    handleCellClick(entryId, workerName, day, shift, allowed, cell);
+});
 
 async function silentUpdateShift(entryId, newShift, cellElement) {
     if (!newShift) return;
@@ -168,23 +215,34 @@ async function silentUpdateShift(entryId, newShift, cellElement) {
     }
 }
 
-function startPainting(entryId, cellElement) {
+function startPainting(entryId, allowedShifts, cellElement) {
     if (!currentBrush) return;
+    if (['M', 'T', 'N'].includes(currentBrush)) {
+        const allowed = allowedShifts.split(',');
+        if (!allowed.includes(currentBrush)) {
+            showFlash('Turno no permitido para este trabajador', 'warning');
+            return;
+        }
+    }
     isPainting = true;
     silentUpdateShift(entryId, currentBrush, cellElement);
 }
 
-function continuePainting(entryId, cellElement) {
+function continuePainting(entryId, allowedShifts, cellElement) {
     if (!isPainting || !currentBrush) return;
+    if (['M', 'T', 'N'].includes(currentBrush)) {
+        const allowed = allowedShifts.split(',');
+        if (!allowed.includes(currentBrush)) return;
+    }
     silentUpdateShift(entryId, currentBrush, cellElement);
 }
 
-function handleCellClick(entryId, workerName, day, currentShift, cellElement) {
+function handleCellClick(entryId, workerName, day, currentShift, allowedShifts, cellElement) {
     // If brush is active, startPainting already handled it via mousedown.
     if (currentBrush) return;
     
     // Fallback to modal if no brush is selected
-    openShiftModal(entryId, workerName, day, currentShift);
+    openShiftModal(entryId, workerName, day, currentShift, allowedShifts);
 }
 
 function _getGroupLabel(filter) {
@@ -230,10 +288,22 @@ async function generateSchedule(projectYear = false) {
 }
 
 /* ===== SHIFT EDIT MODAL ===== */
-function openShiftModal(entryId, workerName, day, currentShift) {
+function openShiftModal(entryId, workerName, day, currentShift, allowedShifts) {
     document.getElementById('shift-modal-info').textContent = `${workerName} — Día ${day}`;
     document.getElementById('shift-select').value = currentShift;
     document.getElementById('shift-entry-id').value = entryId;
+    
+    // Disable disallowed options
+    const select = document.getElementById('shift-select');
+    const allowed = allowedShifts.split(',');
+    Array.from(select.options).forEach(opt => {
+        if (['M', 'T', 'N'].includes(opt.value)) {
+            opt.disabled = !allowed.includes(opt.value);
+            if (opt.disabled) opt.textContent = `${opt.value} (Bloqueado)`;
+            else opt.textContent = opt.value;
+        }
+    });
+
     document.getElementById('shift-modal-backdrop').classList.add('active');
 }
 

@@ -1342,6 +1342,16 @@ select.form-control {
 .bg-falto { background-color: rgba(239, 68, 68, 0.15); }
 .bg-tardanza { background-color: rgba(245, 158, 11, 0.15); }
 
+/* Nuevas Leyendas */
+.bg-po { background-color: rgba(99, 102, 241, 0.15); } /* Indigo */
+.bg-pc { background-color: rgba(168, 85, 247, 0.15); } /* Purple */
+.bg-pv { background-color: rgba(236, 72, 153, 0.15); } /* Pink */
+.bg-dm { background-color: rgba(20, 184, 166, 0.15); } /* Teal */
+.bg-v { background-color: rgba(132, 204, 22, 0.15); } /* Lime */
+.bg-lm { background-color: rgba(217, 70, 239, 0.15); } /* Fuchsia */
+.bg-le { background-color: rgba(163, 163, 163, 0.15); } /* Neutral */
+.bg-ps { background-color: rgba(249, 115, 22, 0.15); } /* Orange */
+
 .blocked-cell {
     background-color: var(--bg-secondary) !important;
     opacity: 0.6;
@@ -1359,5 +1369,18 @@ select.form-control {
 .pulse-today {
     box-shadow: inset 0 0 0 2px var(--accent-blue);
     background-color: rgba(59, 130, 246, 0.05);
+}
+
+/* Nuevos turnos de Asistencia A y F */
+.shift-A {
+    background-color: var(--accent-green) !important;
+    color: #fff !important;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.2) !important;
+}
+
+.shift-F {
+    background-color: var(--accent-red) !important;
+    color: #fff !important;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.2) !important;
 }
 

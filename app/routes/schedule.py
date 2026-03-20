@@ -93,6 +93,13 @@ def update_entry(entry_id):
     new_shift = data.get('shift_code')
 
     if new_shift and new_shift != old_shift:
+        # Validate allowed shifts
+        worker = Worker.query.get(entry.worker_id)
+        if worker and new_shift in ['M', 'T', 'N']:
+            allowed = (worker.allowed_shifts or 'M,T,N').split(',')
+            if new_shift not in allowed:
+                return jsonify({'error': f'El trabajador no tiene habilitado el turno {new_shift}'}), 400
+                
         entry.shift_code = new_shift
         entry.is_auto_generated = False
 

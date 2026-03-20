@@ -80,7 +80,10 @@ def post_attendance():
     status = data['status']
     notes = data.get('notes', '')
 
-    record = save_attendance(worker_id, target_date, status, current_user.id, notes)
+    try:
+        record = save_attendance(worker_id, target_date, status, current_user.id, notes)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 403
 
     return jsonify({
         'message': 'Asistencia registrada',
@@ -95,9 +98,12 @@ def batch_attendance():
     target_date = date.fromisoformat(data['date'])
     records = data.get('records', [])
 
-    for r in records:
-        save_attendance(r['worker_id'], target_date, r['status'],
-                        current_user.id, r.get('notes', ''))
+    try:
+        for r in records:
+            save_attendance(r['worker_id'], target_date, r['status'],
+                            current_user.id, r.get('notes', ''))
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 403
 
     return jsonify({'message': f'{len(records)} registros guardados'})
 

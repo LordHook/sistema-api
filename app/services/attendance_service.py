@@ -5,6 +5,8 @@ from app.models.attendance import AttendanceRecord
 from app.models.schedule import ScheduleEntry
 from app.models.worker import Worker
 from app.models.audit import AuditLog
+from app.models.user import User
+from datetime import datetime
 
 
 def get_attendance_for_date(target_date):
@@ -65,6 +67,29 @@ def save_attendance(worker_id, target_date, status, user_id, notes=None):
         month=target_date.month,
         day=target_date.day,
     ).first()
+
+    # Time validations
+    user = User.query.get(user_id)
+    if user and not user.is_admin:
+        if user.is_visualizador:
+            raise ValueError("Los visualizadores no tienen permiso para editar asistencia.")
+            
+        now = datetime.now()
+        today = date.today()
+        
+        # 23:59 Lock for past days
+        if target_date < today:
+            raise ValueError("No se puede editar la asistencia de días pasados.")
+        
+        # Live Time Validation
+        shift = schedule.shift_code if schedule else None
+        current_hour = now.hour
+        if shift == 'M' and not (6 <= current_hour < 14):
+            raise ValueError("El turno Mañana solo se puede marcar entre las 06:00 y las 13:59.")
+        elif shift == 'T' and not (14 <= current_hour < 22):
+            raise ValueError("El turno Tarde solo se puede marcar entre las 14:00 y las 21:59.")
+        elif shift == 'N' and not (current_hour >= 22 or current_hour < 6):
+            raise ValueError("El turno Noche solo se puede marcar entre las 22:00 y las 05:59.")
 
     old_status = record.status if record else None
 
@@ -129,8 +154,8 @@ def get_dashboard_stats(target_date=None, user_role='admin', assigned_group=None
         AttendanceRecord.attendance_date == target_date,
         AttendanceRecord.worker_id.in_(relevant_worker_ids)
     ).all()
-    attended = sum(1 for r in today_records if r.status == 'asistio')
-    absent = sum(1 for r in today_records if r.status == 'falto')
+    attended = sum(1 for r in today_records if r.status in ('A', 'asistio'))
+    absent = sum(1 for r in today_records if r.status in ('F', 'falto'))
     late = sum(1 for r in today_records if r.status == 'tardanza')
 
     # Count rest/vacation today
@@ -155,8 +180,8 @@ def get_dashboard_stats(target_date=None, user_role='admin', assigned_group=None
     # Pre-fill expected groups based on role
     if user_role == 'supervisor' and assigned_group:
         group_stats = {
-            f'Grupo {assigned_group}': {'asistio': 0, 'falto': 0, 'tardanza': 0},
-            'B': {'asistio': 0, 'falto': 0, 'tardanza': 0}
+            f'Grupo {assigned_group}': {'A': 0, 'F': 0, 'tardanza': 0},
+            'B': {'A': 0, 'F': 0, 'tardanza': 0}
         }
     
     for r in monthly_records:
@@ -164,9 +189,14 @@ def get_dashboard_stats(target_date=None, user_role='admin', assigned_group=None
         if worker:
             group_key = f'Grupo {worker.group_number}' if worker.group_number else worker.section
             if group_key not in group_stats:
-                group_stats[group_key] = {'asistio': 0, 'falto': 0, 'tardanza': 0}
+                group_stats[group_key] = {'A': 0, 'F': 0, 'tardanza': 0}
             if r.status in group_stats[group_key]:
                 group_stats[group_key][r.status] += 1
+            # Fallback for old data
+            elif r.status == 'asistio':
+                group_stats[group_key]['A'] += 1
+            elif r.status == 'falto':
+                group_stats[group_key]['F'] += 1
 
     return {
         'date': target_date.isoformat(),

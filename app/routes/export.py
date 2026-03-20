@@ -1,10 +1,11 @@
-﻿from flask import Blueprint, request, send_file
+from flask import Blueprint, request, send_file
 from flask_login import login_required, current_user
 from datetime import date
 from app.services.export_service import (
     export_schedule_excel,
     export_schedule_pdf,
     export_audit_excel,
+    export_attendance_excel,
 )
 from app.models.audit import AuditLog
 from app.extensions import db
@@ -75,5 +76,37 @@ def export_audit():
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
         download_name='Registro_Auditoria_CCO.xlsx',
+    )
+
+
+@export_bp.route('/export/attendance')
+@login_required
+def export_attendance():
+    year = request.args.get('year', date.today().year, type=int)
+    month = request.args.get('month', date.today().month, type=int)
+    
+    if current_user.role == 'supervisor':
+        group = str(current_user.assigned_group) if current_user.assigned_group else request.args.get('group', '1')
+    else:
+        group = request.args.get('group', None)
+
+    month_names = [
+        '', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+        'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+    ]
+
+    AuditLog.log(
+        user_id=current_user.id,
+        action='export',
+        details=f'Exportación de asistencia {month_names[month]} {year} (Grupo {group or "Todos"})',
+    )
+    db.session.commit()
+
+    output = export_attendance_excel(year, month, group, current_user.role)
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'Asistencia_CCO_{month_names[month]}_{year}.xlsx',
     )
 

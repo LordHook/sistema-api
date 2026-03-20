@@ -36,8 +36,8 @@ def generate_monthly_schedule(year, month):
 
     entries = []
 
-    # Sections A, B, C (fixed shift)
-    for section_key in ['A', 'B', 'C']:
+    # Sections A, C (fixed shift) (B is skipped from auto generation!)
+    for section_key in ['A', 'C']:
         entries.extend(
             _generate_fixed_shift_section(sections[section_key], year, month, num_days, 'M')
         )
@@ -167,16 +167,26 @@ def _generate_sequential_schedule(workers, year, month, num_days, shift_rotation
         last_date_checked = date(year, month, 1) - timedelta(days=1)
         prev_entries = []
         if not section_a_rules:
-            prev_entries = ScheduleEntry.query.filter(
+            # Use a cross-DB compatible approach: fetch recent entries and filter in Python
+            # Look back up to 2 months to find anchor data
+            prev_month = month - 1 if month > 1 else 12
+            prev_year = year if month > 1 else year - 1
+            raw_entries = ScheduleEntry.query.filter(
                 ScheduleEntry.worker_id == worker.id,
-                db.func.date(db.cast(ScheduleEntry.year, db.String) + '-' + 
-                             db.func.lpad(db.cast(ScheduleEntry.month, db.String), 2, '0') + '-' + 
-                             db.func.lpad(db.cast(ScheduleEntry.day, db.String), 2, '0')) <= last_date_checked
+                db.or_(
+                    db.and_(ScheduleEntry.year == prev_year, ScheduleEntry.month == prev_month),
+                    db.and_(ScheduleEntry.year == year, ScheduleEntry.month == month - 2 if month > 2 else 12)
+                )
             ).order_by(
                 ScheduleEntry.year.desc(), 
                 ScheduleEntry.month.desc(), 
                 ScheduleEntry.day.desc()
-            ).limit(14).all()
+            ).all()
+            # Filter to only entries on or before last_date_checked
+            prev_entries = [
+                e for e in raw_entries
+                if date(e.year, e.month, e.day) <= last_date_checked
+            ][:14]
 
         last_rest_date = None
         current_shift_index = base_shift_index
@@ -279,13 +289,18 @@ def get_schedule_grid(year, month, group_filter=None, user_role='admin'):
     # Filter to relevant workers
     relevant_workers = []
     for w in workers:
-        if w.status == 'activo':
+        # Hide if started in the future
+        if w.start_date:
+            if w.start_date.year > year or (w.start_date.year == year and w.start_date.month > month):
+                continue
+
+        # Hide if resigned in the past relative to the currently viewed month
+        if w.resignation_date:
+            if w.resignation_date.year > year or (w.resignation_date.year == year and w.resignation_date.month >= month):
+                relevant_workers.append(w)
+        # Otherwise show if active
+        elif w.status == 'activo':
             relevant_workers.append(w)
-        elif w.resignation_date:
-            if w.resignation_date.year == year and w.resignation_date.month >= month:
-                relevant_workers.append(w)
-            elif w.resignation_date.year > year:
-                relevant_workers.append(w)
 
     # Apply group filter
     if group_filter and group_filter != 'all':
@@ -294,9 +309,12 @@ def get_schedule_grid(year, month, group_filter=None, user_role='admin'):
         elif group_filter.isdigit():
             gnum = int(group_filter)
             relevant_workers = [w for w in relevant_workers
-                                if (w.section == 'D' and (w.group_number or 1) == gnum) or w.section == 'B']
+                                if (w.section == 'D' and (w.group_number or 1) == gnum) 
+                                or w.section == 'B'
+                                or (w.section == 'C' and w.group_number == gnum)]
 
-    # Security Rules: Hide Section A from Supervisors
+    # Security Rules: Hide Section A from Supervisors.
+    # We already filtered them, but enforce strictly here.
     if user_role == 'supervisor':
         relevant_workers = [w for w in relevant_workers if w.section != 'A']
 
@@ -344,23 +362,32 @@ def _build_sections(workers, entry_map, num_days, group_filter=None):
             sections.append({
                 'key': 'B',
                 'name': 'Área de Gestión de Video',
-                'groups': [_build_worker_rows(sec_b, entry_map, num_days)],
+                'groups': [{'label': '----- GESTIÓN DE VIDEO -----', 'rows': _build_worker_rows(sec_b, entry_map, num_days)['rows']}],
+            })
+
+        # Sec C (Supervisor del grupo)
+        sec_c = [w for w in workers if w.section == 'C']
+        if sec_c:
+            sections.append({
+                'key': 'C',
+                'name': 'Supervisor',
+                'groups': [{'label': '----- SUPERVISORES -----', 'rows': _build_worker_rows(sec_c, entry_map, num_days)['rows']}],
             })
 
         # Sec D
         d_workers = [w for w in workers if w.section == 'D']
         if d_workers:
-            groups_data = {'CCO': [], 'SCV': []}
+            groups_data = {'CCO': [], 'SCV': [], 'ALFA': []}
             for w in d_workers:
-                area_key = w.area if w.area in ('CCO', 'SCV') else 'CCO'
+                area_key = w.area if w.area in ('CCO', 'SCV', 'ALFA') else 'CCO'
                 groups_data[area_key].append(w)
 
             d_groups = []
-            for area in ['CCO', 'SCV']:
+            for area in ['CCO', 'SCV', 'ALFA']:
                 area_workers = groups_data.get(area, [])
                 if area_workers:
                     d_groups.append({
-                        'label': f'Grupo {gnum} - {area}',
+                        'label': f'----- OPERADORES {area} -----',
                         'rows': _build_worker_rows(area_workers, entry_map, num_days)['rows'],
                     })
 
@@ -397,13 +424,13 @@ def _build_sections(workers, entry_map, num_days, group_filter=None):
             for w in d_workers:
                 g = w.group_number or 1
                 if g not in groups_data:
-                    groups_data[g] = {'CCO': [], 'SCV': []}
-                area_key = w.area if w.area in ('CCO', 'SCV') else 'CCO'
+                    groups_data[g] = {'CCO': [], 'SCV': [], 'ALFA': []}
+                area_key = w.area if w.area in ('CCO', 'SCV', 'ALFA') else 'CCO'
                 groups_data[g][area_key].append(w)
 
             d_groups = []
             for group_num in sorted(groups_data.keys()):
-                for area in ['CCO', 'SCV']:
+                for area in ['CCO', 'SCV', 'ALFA']:
                     area_workers = groups_data[group_num].get(area, [])
                     if area_workers:
                         d_groups.append({
@@ -444,6 +471,7 @@ def _build_worker_rows(workers, entry_map, num_days):
                 'regime': w.regime,
                 'area': w.area,
                 'status': w.status,
+                'allowed_shifts': w.allowed_shifts or 'M,T,N',
             },
             'days': days,
         })

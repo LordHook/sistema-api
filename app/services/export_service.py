@@ -1,4 +1,4 @@
-﻿"""Servicio de exportación a Excel y PDF."""
+"""Servicio de exportación a Excel y PDF."""
 import io
 import calendar
 from datetime import date
@@ -14,6 +14,8 @@ from reportlab.lib.units import mm
 from app.services.schedule_generator import get_schedule_grid
 from app.models.audit import AuditLog
 from app.models.worker import Worker
+from app.models.attendance import AttendanceRecord
+from sqlalchemy import extract
 
 
 # Color mapping for Excel
@@ -160,6 +162,131 @@ def export_schedule_excel(year, month):
         code_cell.alignment = Alignment(horizontal='center')
         ws.cell(row=current_row, column=2, value=desc).font = Font(size=9)
         ws.merge_cells(start_row=current_row, start_column=2, end_row=current_row, end_column=5)
+        current_row += 1
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return output
+
+
+def export_attendance_excel(year, month, group_filter=None, user_role='admin'):
+    """Export the monthly attendance to an Excel file."""
+    grid = get_schedule_grid(year, month, group_filter, user_role)
+    
+    # Fetch all attendance records for this month
+    records = AttendanceRecord.query.filter(
+        extract('year', AttendanceRecord.attendance_date) == year,
+        extract('month', AttendanceRecord.attendance_date) == month
+    ).all()
+    att_map = {(r.worker_id, r.attendance_date.day): r for r in records}
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f'Asist {grid["month_name"]} {year}'
+
+    thin_border = Border(
+        left=Side(style='thin'), right=Side(style='thin'),
+        top=Side(style='thin'), bottom=Side(style='thin'),
+    )
+
+    header_fill = PatternFill(start_color='0f766e', end_color='0f766e', fill_type='solid') # Teal base
+    header_font = Font(bold=True, color='FFFFFF', size=10)
+    title_font = Font(bold=True, size=14, color='0f766e')
+    
+    # Status colors
+    att_colors = {
+        'A': PatternFill(start_color='22c55e', end_color='22c55e', fill_type='solid'),
+        'F': PatternFill(start_color='ef4444', end_color='ef4444', fill_type='solid'),
+        'asistio': PatternFill(start_color='22c55e', end_color='22c55e', fill_type='solid'),
+        'falto': PatternFill(start_color='ef4444', end_color='ef4444', fill_type='solid'),
+        'tardanza': PatternFill(start_color='f59e0b', end_color='f59e0b', fill_type='solid'),
+        'PO': PatternFill(start_color='6366f1', end_color='6366f1', fill_type='solid'),
+        'PC': PatternFill(start_color='a855f7', end_color='a855f7', fill_type='solid'),
+        'PV': PatternFill(start_color='ec4899', end_color='ec4899', fill_type='solid'),
+        'DM': PatternFill(start_color='14b8a6', end_color='14b8a6', fill_type='solid'),
+        'V': PatternFill(start_color='84cc16', end_color='84cc16', fill_type='solid'),
+        'LM': PatternFill(start_color='d946ef', end_color='d946ef', fill_type='solid'),
+        'LE': PatternFill(start_color='a3a3a3', end_color='a3a3a3', fill_type='solid'),
+        'PS': PatternFill(start_color='f97316', end_color='f97316', fill_type='solid'),
+        'NI': PatternFill(start_color='64748b', end_color='64748b', fill_type='solid'),
+    }
+
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=grid['num_days'] + 4)
+    title_cell = ws['A1']
+    title_cell.value = f'CONTROL DE ASISTENCIA - CCO - {grid["month_name"].upper()} {year}'
+    title_cell.font = title_font
+    title_cell.alignment = Alignment(horizontal='center', vertical='center')
+    ws.row_dimensions[1].height = 30
+
+    current_row = 3
+    headers = ['N°', 'R.L', 'APELLIDOS Y NOMBRES']
+    for dh in grid['day_headers']:
+        headers.append(f'{dh["weekday"]}\n{dh["day"]}')
+
+    for col_idx, header in enumerate(headers, 1):
+        cell = ws.cell(row=current_row, column=col_idx, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        cell.border = thin_border
+
+    ws.column_dimensions['A'].width = 5
+    ws.column_dimensions['B'].width = 6
+    ws.column_dimensions['C'].width = 28
+    for col in range(4, grid['num_days'] + 4):
+        ws.column_dimensions[get_column_letter(col)].width = 4.5
+
+    current_row += 1
+
+    for section in grid['sections']:
+        ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=grid['num_days'] + 3)
+        sec_cell = ws.cell(row=current_row, column=1, value=f'SECCIÓN {section["key"]}: {section["name"]}')
+        sec_cell.font = Font(bold=True, size=11, color='FFFFFF')
+        sec_cell.fill = PatternFill(start_color='115e59', end_color='115e59', fill_type='solid') # Dark Teal
+        current_row += 1
+
+        for group in section['groups']:
+            if 'label' in group:
+                ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=grid['num_days'] + 3)
+                grp_cell = ws.cell(row=current_row, column=1, value=f'  {group["label"]}')
+                grp_cell.font = Font(bold=True, size=10, color='e2e8f0')
+                grp_cell.fill = PatternFill(start_color='0f766e', end_color='0f766e', fill_type='solid')
+                current_row += 1
+
+            rows_data = group.get('rows', [])
+            for row in rows_data:
+                worker = row['worker']
+                ws.cell(row=current_row, column=1, value=worker['order_number']).border = thin_border
+                ws.cell(row=current_row, column=2, value=worker['regime']).border = thin_border
+                ws.cell(row=current_row, column=3, value=worker['name']).border = thin_border
+
+                for day_data in row['days']:
+                    col = day_data['day'] + 3
+                    record = att_map.get((worker['id'], day_data['day']))
+                    att_status = record.status if record else ''
+                    
+                    # Convert to visual format
+                    display_text = ''
+                    if att_status == 'A': display_text = 'A'
+                    elif att_status == 'F': display_text = 'F'
+                    elif att_status == 'tardanza': display_text = 'T'
+                    elif att_status == 'asistio': display_text = 'A'
+                    elif att_status == 'falto': display_text = 'F'
+                    elif att_status: display_text = att_status
+                    
+                    cell = ws.cell(row=current_row, column=col, value=display_text)
+                    cell.alignment = Alignment(horizontal='center', vertical='center')
+                    cell.border = thin_border
+                    cell.font = Font(bold=True, size=8, color='FFFFFF')
+                    
+                    if att_status in att_colors:
+                        cell.fill = att_colors[att_status]
+                    elif day_data['shift'] in ['D', 'V', 'C', 'R']:
+                        # Use schedule background if not marked
+                        cell.fill = SHIFT_FILLS.get(day_data['shift'])
+
+                current_row += 1
         current_row += 1
 
     output = io.BytesIO()

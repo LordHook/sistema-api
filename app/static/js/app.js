@@ -1,4 +1,4 @@
-﻿/* ===== CCO - Global Utilities ===== */
+/* ===== CCO - Global Utilities ===== */
 
 function showFlash(message, type = 'success') {
     const container = document.getElementById('flash-container');

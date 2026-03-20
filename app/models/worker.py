@@ -17,6 +17,7 @@ class Worker(db.Model):
     status = db.Column(db.String(20), nullable=False, default='activo')  # 'activo' | 'inactivo'
     resignation_date = db.Column(db.Date, nullable=True)
     start_date = db.Column(db.Date, nullable=True)
+    allowed_shifts = db.Column(db.String(20), default='M,T,N')  # Ej: 'M,T,N', 'T,N'
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     schedule_entries = db.relationship('ScheduleEntry', backref='worker', lazy='dynamic',

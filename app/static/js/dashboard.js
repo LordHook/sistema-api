@@ -79,9 +79,9 @@ function renderBarChart(groupStats) {
     if (barChart) barChart.destroy();
 
     const labels = Object.keys(groupStats);
-    const absent = labels.map(g => groupStats[g].falto || 0);
+    const absent = labels.map(g => groupStats[g].F || 0);
     const late = labels.map(g => groupStats[g].tardanza || 0);
-    const attended = labels.map(g => groupStats[g].asistio || 0);
+    const attended = labels.map(g => groupStats[g].A || 0);
 
     barChart = new Chart(ctx, {
         type: 'bar',

@@ -1,4 +1,4 @@
-﻿/* ===== Personnel Management ===== */
+/* ===== Personnel Management ===== */
 
 let currentView = 'table';
 let allWorkers = [];

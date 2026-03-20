@@ -27,6 +27,14 @@ class User(UserMixin, db.Model):
     @property
     def is_admin(self):
         return self.role == 'admin'
+        
+    @property
+    def is_supervisor(self):
+        return self.role == 'supervisor'
+        
+    @property
+    def is_visualizador(self):
+        return self.role == 'visualizador'
 
     def __repr__(self):
         return f'<User {self.username} ({self.role})>'
