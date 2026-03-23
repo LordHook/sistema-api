@@ -68,18 +68,22 @@ def save_attendance(worker_id, target_date, status, user_id, notes=None):
         day=target_date.day,
     ).first()
 
+    now = datetime.now()
+    today = date.today()
+
+    # Días Futuros: Bloqueo total (incluso admin)
+    if target_date > today:
+        raise ValueError("No se puede marcar asistencia en días futuros.")
+
     # Time validations
     user = User.query.get(user_id)
     if user and not user.is_admin:
         if user.is_visualizador:
             raise ValueError("Los visualizadores no tienen permiso para editar asistencia.")
-            
-        now = datetime.now()
-        today = date.today()
         
-        # 23:59 Lock for past days
+        # 23:59 Lock for past days (Supervisors only edit Today)
         if target_date < today:
-            raise ValueError("No se puede editar la asistencia de días pasados.")
+            raise ValueError("Solo el Administrador puede editar la asistencia de días pasados.")
         
         # Live Time Validation
         shift = schedule.shift_code if schedule else None
@@ -92,6 +96,22 @@ def save_attendance(worker_id, target_date, status, user_id, notes=None):
             raise ValueError("El turno Noche solo se puede marcar entre las 22:00 y las 05:59.")
 
     old_status = record.status if record else None
+
+    # Handle Eraser logic
+    if not status or status == 'CLEAR':
+        if record:
+            db.session.delete(record)
+            AuditLog.log(
+                user_id=user_id,
+                action='attendance_change',
+                target_worker_id=worker_id,
+                target_date=target_date,
+                old_value=old_status,
+                new_value='borrado',
+                details='Registro de asistencia eliminado (Borrador)',
+            )
+            db.session.commit()
+        return None
 
     if record:
         record.status = status

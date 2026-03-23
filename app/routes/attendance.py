@@ -66,8 +66,11 @@ def get_attendance_grid():
                         day_data['attendance_status'] = None
                         day_data['attendance_id'] = None
 
-    # Pass the current day for UI logic
-    grid['current_day'] = date.today().day if (date.today().year == year and date.today().month == month) else None
+    today_date = date.today()
+    grid['current_day'] = today_date.day if (today_date.year == year and today_date.month == month) else None
+    grid['real_year'] = today_date.year
+    grid['real_month'] = today_date.month
+    grid['real_day'] = today_date.day
     grid['is_admin'] = current_user.is_admin
 
     return jsonify(grid)

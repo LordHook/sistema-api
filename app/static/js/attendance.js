@@ -29,6 +29,12 @@ function changeMonth(delta) {
     loadAttendanceGrid();
 }
 
+let currentBrush = '';
+let isPainting = false;
+let realYear = null;
+let realMonth = null;
+let realDay = null;
+
 /* ===== LOAD ATTENDANCE ===== */
 async function loadAttendanceGrid() {
     const container = document.getElementById('attendance-container');
@@ -45,6 +51,9 @@ async function loadAttendanceGrid() {
         document.getElementById('current-month-label').textContent = `${grid.month_name} ${grid.year}`;
         
         currentDayBackend = grid.current_day;
+        realYear = grid.real_year;
+        realMonth = grid.real_month;
+        realDay = grid.real_day;
         isAdmin = grid.is_admin;
         
         // Show brush palette if Admin or Supervisor
@@ -58,9 +67,6 @@ async function loadAttendanceGrid() {
         container.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><h4>Error al cargar la asistencia</h4></div>';
     }
 }
-
-let currentBrush = '';
-let isPainting = false;
 
 /* ===== BRUSH PALETTE ===== */
 function setBrush(shift) {
@@ -163,11 +169,23 @@ function renderAttendanceGrid(grid) {
                         displayVal = `<span style="opacity:0.3; font-size:0.65rem;">${scheduledShift}</span>`;
                     }
 
-                    // Strict edit rules
+                    // Strict edit rules checking past/present/future
                     let canEdit = false;
                     if (w.status !== 'inactivo' && !FIXED_STATES.includes(scheduledShift)) {
-                        if (isAdmin) canEdit = true;
-                        else if (isToday) canEdit = true;
+                        // Compare (currentYear, currentMonth, d.day) vs (realYear, realMonth, realDay)
+                        const cellDateStr = `${currentYear}${String(currentMonth).padStart(2,'0')}${String(d.day).padStart(2,'0')}`;
+                        const realDateStr = `${realYear}${String(realMonth).padStart(2,'0')}${String(realDay).padStart(2,'0')}`;
+                        
+                        if (cellDateStr > realDateStr) {
+                            // FUTURE: Blocked for everyone (Admin & Supervisor)
+                            canEdit = false;
+                        } else if (cellDateStr < realDateStr) {
+                            // PAST: Admin only
+                            if (isAdmin) canEdit = true;
+                        } else {
+                            // TODAY: Admin or Supervisor
+                            canEdit = true;
+                        }
                     }
                     
                     let interactData = '';
@@ -245,15 +263,21 @@ async function silentUpdateStatus(workerId, day, newStatus, cellElement) {
     const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     
     // Optistic UI
-    const oldHtml = cellElement.innerHTML;
     const oldClassName = cellElement.className;
     
-    cellElement.className = `cell-shift cell-att shift-${newStatus}`;
-    if (['PO','PC','PV','DM','V','LM','LE','PS'].includes(newStatus)) {
-        cellElement.classList.add(`bg-${newStatus.toLowerCase()}`);
+    if (newStatus === 'CLEAR') {
+        cellElement.className = 'cell-shift cell-att editable-cell interactive-att-cell shift-painting';
+        cellElement.innerHTML = '';
+        cellElement.setAttribute('data-status', '');
+    } else {
+        cellElement.className = `cell-shift cell-att editable-cell interactive-att-cell shift-${newStatus}`;
+        if (['PO','PC','PV','DM','V','LM','LE','PS'].includes(newStatus)) {
+            cellElement.classList.add(`bg-${newStatus.toLowerCase()}`);
+        }
+        cellElement.innerHTML = newStatus;
+        cellElement.setAttribute('data-status', newStatus);
+        cellElement.classList.add('shift-painting');
     }
-    cellElement.innerHTML = newStatus;
-    cellElement.classList.add('shift-painting');
     setTimeout(() => cellElement.classList.remove('shift-painting'), 600);
 
     try {

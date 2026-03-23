@@ -24,24 +24,10 @@ systemctl stop cco
 cd /opt/cco
 unzip -o -q /opt/deployment.zip
 
-echo "Clearing cco_db schedules in Production..."
+# Make sure python environment works
 source .venv/bin/activate
 export $(grep -v '^#' .env | xargs)
-python3 -c "
-from app import create_app
-from app.extensions import db
-from app.models.schedule import ScheduleEntry
-
-app = create_app()
-with app.app_context():
-    count = ScheduleEntry.query.count()
-    if count > 0:
-        ScheduleEntry.query.delete()
-        db.session.commit()
-        print(f'Borrados {count} registros de horarios en PRODUCCION.')
-    else:
-        print('La base de datos de horarios en PRODUCCION ya está vacía.')
-"
+python3 -c "print('Actualizacion de codigo finalizada en produccion.')"
 
 echo "Restarting Service..."
 chown -R cco:cco /opt/cco
