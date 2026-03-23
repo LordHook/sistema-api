@@ -75,9 +75,11 @@ python3 -c "import sys; sys.path.append('/opt/cco'); from app import create_app;
 
 python3 seed_phase6.py
 
-# Run App
+# Run App with Gunicorn
+pkill -f gunicorn || true
 pkill -f run.py || true
-nohup python3 run.py --host=0.0.0.0 --port=5000 > app.log 2>&1 &
+# Use run:app because run.py creates the 'app' instance
+nohup .venv/bin/gunicorn -w 4 -b 0.0.0.0:5000 --chdir /opt/cco run:app --daemon > gunicorn.log 2>&1 &
 """
 
 print("Executing bash script on remote...")

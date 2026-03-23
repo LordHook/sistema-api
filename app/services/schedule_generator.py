@@ -36,8 +36,8 @@ def generate_monthly_schedule(year, month):
 
     entries = []
 
-    # Sections A, C (fixed shift) (B is skipped from auto generation!)
-    for section_key in ['A', 'C']:
+    # Sections A, B, C (fixed shift)
+    for section_key in ['A', 'B', 'C']:
         entries.extend(
             _generate_fixed_shift_section(sections[section_key], year, month, num_days, 'M')
         )

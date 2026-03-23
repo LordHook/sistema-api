@@ -138,37 +138,34 @@ function renderAttendanceGrid(grid) {
                 html += `<td class="cell-name" style="${nameStyle}" title="${w.name}">${w.name}</td>`;
 
                 row.days.forEach(d => {
-                    const status = d.attendance_status; // e.g. 'M', 'T', 'PO', null
+                    const status = d.attendance_status; // e.g. 'A', 'F'
                     const scheduledShift = d.shift;
                     const isToday = (d.day === currentDayBackend);
                     
                     let cellClasses = 'cell-shift cell-att';
                     let displayVal = '';
                     
-                    // Priority: if scheduled as D, it must be locked and shown as D
-                    if (scheduledShift === 'D') {
-                        cellClasses += ' shift-D blocked-cell';
-                        displayVal = 'D';
+                    const WORK_SHIFTS = ['M', 'T', 'N'];
+                    const FIXED_STATES = ['D', 'R', 'PO', 'PC', 'PV', 'DM', 'V', 'LM', 'LE', 'PS', 'NI', 'C'];
+                    
+                    // Priority: if scheduled as a inherited fixed state, lock it and show it
+                    if (FIXED_STATES.includes(scheduledShift)) {
+                        cellClasses += ` shift-${scheduledShift} blocked-cell`;
+                        if (['PO','PC','PV','DM','V','LM','LE','PS'].includes(scheduledShift)) {
+                            cellClasses += ` bg-${scheduledShift.toLowerCase()}`;
+                        }
+                        displayVal = `<span style="font-size:0.70rem; font-weight:bold; color:var(--text-muted); opacity:1;">${scheduledShift}</span>`;
                     } else if (status) {
                         cellClasses += ` shift-${status}`;
-                        // Exception mapping for complex backgrounds
-                        if (['PO','PC','PV','DM','V','LM','LE','PS'].includes(status)) {
-                            cellClasses += ` bg-${status.toLowerCase()}`;
-                        }
                         displayVal = status;
-                    } else if (scheduledShift) {
+                    } else if (scheduledShift && !WORK_SHIFTS.includes(scheduledShift)) {
                         cellClasses += ` shift-${scheduledShift}-hint`;
                         displayVal = `<span style="opacity:0.3; font-size:0.65rem;">${scheduledShift}</span>`;
-                        // Blocked visual for static shifts
-                        if (['R','NI','V','C'].includes(scheduledShift)) {
-                            cellClasses += ' blocked-cell';
-                            displayVal = `<span style="font-size:0.70rem; font-weight:bold; color:var(--text-muted); opacity:1;">${scheduledShift}</span>`;
-                        }
                     }
 
                     // Strict edit rules
                     let canEdit = false;
-                    if (w.status !== 'inactivo' && scheduledShift !== 'R' && scheduledShift !== 'NI' && scheduledShift !== 'D' && scheduledShift !== 'V' && scheduledShift !== 'C') {
+                    if (w.status !== 'inactivo' && !FIXED_STATES.includes(scheduledShift)) {
                         if (isAdmin) canEdit = true;
                         else if (isToday) canEdit = true;
                     }

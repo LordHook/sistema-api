@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+
+{% block title %}Rol de Servicio - CCO{% endblock %}
+{% block page_title %}Rol de Servicio{% endblock %}
+{% block page_subtitle %}Horario mensual del personal{% endblock %}
+
+{% block page_actions %}
+<div class="month-picker">
+    <button class="btn-icon" onclick="changeMonth(-1)" id="btn-prev-month">◀</button>
+    <span class="month-label" id="month-label">-</span>
+    <button class="btn-icon" onclick="changeMonth(1)" id="btn-next-month">▶</button>
+</div>
+{% if current_user.is_admin %}
+<div class="d-flex gap-1 align-center">
+    <button class="btn btn-success btn-sm" onclick="generateSchedule(false)" id="btn-generate-schedule">
+        ⚡ Generar Mes Actual
+    </button>
+    <button class="btn btn-primary btn-sm" onclick="generateSchedule(true)" id="btn-generate-schedule-year" style="background-color: var(--accent-indigo); border-color: var(--accent-indigo);">
+        🚀 Proyectar Año
+    </button>
+</div>
+{% endif %}
+<div class="d-flex gap-1">
+    <button class="btn btn-outline btn-sm" onclick="exportSchedule('xlsx')" id="btn-export-xlsx">📥 Excel</button>
+    <button class="btn btn-outline btn-sm" onclick="exportSchedule('pdf')" id="btn-export-pdf">📄 PDF</button>
+</div>
+<button class="btn btn-outline btn-sm" onclick="openAuditModal()" id="btn-open-audit-schedule">📋 Auditoría</button>
+{% endblock %}
+
+{% block content %}
+{% if current_user.is_admin %}
+<div class="card mb-4" style="background-color: var(--bg-tertiary); padding: 0.5rem 1rem; margin-bottom: 1rem;">
+    <div class="d-flex align-center gap-1">
+        <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin-right: 1rem;">Modo Pincel (Edición Rápida):</span>
+        <div class="brush-palette d-flex gap-1">
+            <button class="brush-btn" data-shift="M" onclick="setBrush('M')" style="background: rgba(34, 197, 94, 0.15); border: 1px solid var(--accent-green); color: var(--accent-green); padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold;">M</button>
+            <button class="brush-btn" data-shift="T" onclick="setBrush('T')" style="background: rgba(245, 158, 11, 0.15); border: 1px solid var(--accent-amber); color: var(--accent-amber); padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold;">T</button>
+            <button class="brush-btn" data-shift="N" onclick="setBrush('N')" style="background: rgba(99, 102, 241, 0.15); border: 1px solid var(--accent-indigo); color: var(--accent-indigo); padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold;">N</button>
+            <button class="brush-btn" data-shift="D" onclick="setBrush('D')" style="background: rgba(59, 130, 246, 0.15); border: 1px solid var(--accent-blue); color: var(--accent-blue); padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold;">D</button>
+            <button class="brush-btn" data-shift="PO" onclick="setBrush('PO')" style="background: rgba(99, 102, 241, 0.15); border: 1px solid #6366f1; color: #6366f1; padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold;">PO</button>
+            <button class="brush-btn" data-shift="PC" onclick="setBrush('PC')" style="background: rgba(168, 85, 247, 0.15); border: 1px solid #a855f7; color: #a855f7; padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold;">PC</button>
+            <button class="brush-btn" data-shift="PV" onclick="setBrush('PV')" style="background: rgba(236, 72, 153, 0.15); border: 1px solid #ec4899; color: #ec4899; padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold;">PV</button>
+            <button class="brush-btn" data-shift="DM" onclick="setBrush('DM')" style="background: rgba(20, 184, 166, 0.15); border: 1px solid #14b8a6; color: #14b8a6; padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold;">DM</button>
+            <button class="brush-btn" data-shift="V" onclick="setBrush('V')" style="background: rgba(132, 204, 22, 0.15); border: 1px solid #84cc16; color: #84cc16; padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold;">V</button>
+            <button class="brush-btn" data-shift="LM" onclick="setBrush('LM')" style="background: rgba(217, 70, 239, 0.15); border: 1px solid #d946ef; color: #d946ef; padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold;">LM</button>
+            <button class="brush-btn" data-shift="LE" onclick="setBrush('LE')" style="background: rgba(163, 163, 163, 0.15); border: 1px solid #a3a3a3; color: #a3a3a3; padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold;">LE</button>
+            <button class="brush-btn" data-shift="PS" onclick="setBrush('PS')" style="background: rgba(249, 115, 22, 0.15); border: 1px solid #f97316; color: #f97316; padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold;">PS</button>
+            <button class="brush-btn" data-shift="R" onclick="setBrush('R')" style="background: rgba(239, 68, 68, 0.15); border: 1px solid var(--accent-red); color: var(--accent-red); padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold;">R</button>
+            <button class="brush-btn" data-shift="NI" onclick="setBrush('NI')" style="background: var(--bg-secondary); border: 1px solid #4ade80; color: #555; padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold;">NI</button>
+            <button class="brush-btn active" data-shift="" onclick="setBrush('')" style="background: var(--bg-primary); border: 1px solid var(--border-color); color: var(--text-secondary); padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold; margin-left: 0.5rem;" title="Desactivar Pincel">✖ Apagar</button>
+        </div>
+        <span style="font-size: 0.75rem; color: var(--text-muted); margin-left: auto;">* Selecciona un turno y arrastra sobre las celdas para pintar</span>
+    </div>
+</div>
+<style>
+    .brush-btn.active { box-shadow: 0 0 0 2px var(--text-primary); transform: scale(1.1); }
+</style>
+{% endif %}
+
+<!-- Group Filter Tabs -->
+<div class="group-filter-tabs mb-2" id="group-filter-tabs">
+    <button class="group-tab active" data-group="all" onclick="filterByGroup('all')" id="tab-all">
+        📋 Todo el Personal
+    </button>
+    <button class="group-tab" data-group="staff" onclick="filterByGroup('staff')" id="tab-staff">
+        🏛️ Secciones A/B/C
+    </button>
+    <div class="tab-separator"></div>
+    <button class="group-tab group-tab-1" data-group="1" onclick="filterByGroup('1')" id="tab-group-1">
+        🔵 Grupo 1
+    </button>
+    <button class="group-tab group-tab-2" data-group="2" onclick="filterByGroup('2')" id="tab-group-2">
+        🟢 Grupo 2
+    </button>
+    <button class="group-tab group-tab-3" data-group="3" onclick="filterByGroup('3')" id="tab-group-3">
+        🟣 Grupo 3
+    </button>
+</div>
+
+<div class="card">
+    <div class="card-body" style="padding: 0.5rem;">
+        <div class="schedule-container" id="schedule-container">
+            <div class="loading-overlay" id="schedule-loading">
+                <div class="spinner"></div>
+                <span>Cargando horario...</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="legend" id="schedule-legend">
+    <div class="legend-item"><span class="legend-color shift-M">M</span><span>Mañana (06:00-14:00)</span></div>
+    <div class="legend-item"><span class="legend-color shift-T">T</span><span>Tarde (14:00-22:00)</span></div>
+    <div class="legend-item"><span class="legend-color shift-N">N</span><span>Noche (22:00-06:00)</span></div>
+    <div class="legend-item"><span class="legend-color shift-D">D</span><span>Descanso</span></div>
+    <div class="legend-item"><span class="legend-color shift-R">R</span><span>Renuncia</span></div>
+    <div class="legend-item"><span class="legend-color bg-po">PO</span><span>Permiso Onomástico</span></div>
+    <div class="legend-item"><span class="legend-color bg-pc">PC</span><span>Permiso Comisión</span></div>
+    <div class="legend-item"><span class="legend-color bg-pv">PV</span><span>Permiso Vacaciones</span></div>
+    <div class="legend-item"><span class="legend-color bg-dm">DM</span><span>Descanso Médico</span></div>
+    <div class="legend-item"><span class="legend-color bg-v">V</span><span>Vacaciones</span></div>
+    <div class="legend-item"><span class="legend-color bg-lm">LM</span><span>Licencia Maternidad</span></div>
+    <div class="legend-item"><span class="legend-color bg-le">LE</span><span>Licencias Extraord.</span></div>
+    <div class="legend-item"><span class="legend-color bg-ps">PS</span><span>Sindicato</span></div>
+</div>
+
+<!-- Edit Shift Modal -->
+<div class="modal-backdrop" id="shift-modal-backdrop">
+    <div class="modal" style="max-width: 400px;">
+        <div class="modal-header">
+            <h3>Modificar Turno</h3>
+            <button class="modal-close" onclick="closeShiftModal()" id="btn-close-shift">✕</button>
+        </div>
+        <div class="modal-body">
+            <p id="shift-modal-info" class="mb-2" style="color: var(--text-secondary);"></p>
+            <div class="form-group">
+                <label for="shift-select">Nuevo Turno</label>
+                <select class="form-control" id="shift-select">
+                    <option value="M">M - Mañana</option>
+                    <option value="T">T - Tarde</option>
+                    <option value="N">N - Noche</option>
+                    <option value="D">D - Descanso</option>
+                    <option value="R">R - Renuncia</option>
+                    <option value="PO">PO - Permiso Onomástico</option>
+                    <option value="PC">PC - Permiso Comisión</option>
+                    <option value="PV">PV - Permiso Vacaciones</option>
+                    <option value="DM">DM - Descanso Médico</option>
+                    <option value="V">V - Vacaciones</option>
+                    <option value="LM">LM - Lic. Maternidad</option>
+                    <option value="LE">LE - Lic. Extraordinarias</option>
+                    <option value="PS">PS - Sindicato</option>
+                    <option value="NI">NI - No Ingresado</option>
+                </select>
+            </div>
+            <input type="hidden" id="shift-entry-id">
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeShiftModal()" id="btn-cancel-shift">Cancelar</button>
+            <button class="btn btn-primary" onclick="saveShiftChange()" id="btn-save-shift">Guardar</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/schedule.js') }}"></script>
+{% endblock %}
+
