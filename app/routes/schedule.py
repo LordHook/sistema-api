@@ -28,8 +28,10 @@ def get_schedule():
     
     if current_user.role == 'supervisor':
         group = str(current_user.assigned_group) if current_user.assigned_group else request.args.get('group', '1')
-    else:
+    elif current_user.role in ['admin', 'visualizador']:
         group = request.args.get('group', None)  # 'all', 'staff', '1', '2', '3'
+    else:
+        group = 'all'
         
     grid = get_schedule_grid(year, month, group_filter=group, user_role=current_user.role)
     return jsonify(grid)
