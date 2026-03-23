@@ -112,7 +112,10 @@
             <button class="modal-close" onclick="closeShiftModal()" id="btn-close-shift">✕</button>
         </div>
         <div class="modal-body">
-            <p id="shift-modal-info" class="mb-2" style="color: var(--text-secondary);"></p>
+            <input type="hidden" id="shift-worker-id">
+            <input type="hidden" id="shift-day">
+            
+            <p class="mb-2" style="color: var(--text-secondary);"><strong id="shift-modal-info"></strong></p>
             <div class="form-group">
                 <label for="shift-select">Nuevo Turno</label>
                 <select class="form-control" id="shift-select">

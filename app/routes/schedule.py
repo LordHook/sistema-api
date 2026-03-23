@@ -82,41 +82,51 @@ def generate_schedule():
     })
 
 
-@schedule_bp.route('/api/schedule/entry/<int:entry_id>', methods=['PUT'])
+@schedule_bp.route('/api/schedule/entry', methods=['POST'])
 @login_required
-def update_entry(entry_id):
+def create_or_update_entry():
     if not current_user.is_admin:
         return jsonify({'error': 'Solo administradores pueden modificar el horario'}), 403
 
-    entry = ScheduleEntry.query.get_or_404(entry_id)
     data = request.get_json()
-
-    old_shift = entry.shift_code
+    worker_id = data.get('worker_id')
+    day = data.get('day')
+    year = data.get('year')
+    month = data.get('month')
     new_shift = data.get('shift_code')
+
+    if not all([worker_id, year, month, day]):
+        return jsonify({'error': 'Faltan parámetros de fecha o trabajador'}), 400
+
+    entry = ScheduleEntry.query.filter_by(worker_id=worker_id, year=year, month=month, day=day).first()
+    old_shift = entry.shift_code if entry else None
 
     if new_shift and new_shift != old_shift:
         # Validate allowed shifts
-        worker = Worker.query.get(entry.worker_id)
+        worker = Worker.query.get(worker_id)
         if worker and new_shift in ['M', 'T', 'N']:
             allowed = (worker.allowed_shifts or 'M,T,N').split(',')
             if new_shift not in allowed:
                 return jsonify({'error': f'El trabajador no tiene habilitado el turno {new_shift}'}), 400
                 
+        if not entry:
+            entry = ScheduleEntry(worker_id=worker_id, year=year, month=month, day=day, is_auto_generated=False)
+            db.session.add(entry)
+            
         entry.shift_code = new_shift
         entry.is_auto_generated = False
 
         # Handle Resignation special case
         if new_shift == 'R':
-            worker = Worker.query.get(entry.worker_id)
             if worker:
-                worker.resignation_date = date(entry.year, entry.month, entry.day)
+                worker.resignation_date = date(year, month, day)
             
             # Auto-fill R to the end of the month
             subsequent_entries = ScheduleEntry.query.filter(
-                ScheduleEntry.worker_id == entry.worker_id,
-                ScheduleEntry.year == entry.year,
-                ScheduleEntry.month == entry.month,
-                ScheduleEntry.day > entry.day
+                ScheduleEntry.worker_id == worker_id,
+                ScheduleEntry.year == year,
+                ScheduleEntry.month == month,
+                ScheduleEntry.day > day
             ).all()
 
             for sub_entry in subsequent_entries:
@@ -126,9 +136,9 @@ def update_entry(entry_id):
         AuditLog.log(
             user_id=current_user.id,
             action='schedule_change',
-            target_worker_id=entry.worker_id,
-            target_date=date(entry.year, entry.month, entry.day),
-            old_value=old_shift,
+            target_worker_id=worker_id,
+            target_date=date(year, month, day),
+            old_value=old_shift or 'vacio',
             new_value=new_shift,
             details=f'Turno modificado manualmente',
         )

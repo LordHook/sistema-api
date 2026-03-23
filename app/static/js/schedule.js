@@ -116,16 +116,14 @@ function renderScheduleGrid(grid) {
                     const shiftClass = d.shift ? `shift-${d.shift}` : '';
                     let interactData = '';
                     
-                    if (IS_ADMIN && d.entry_id && w.status !== 'inactivo') {
+                    if (IS_ADMIN && w.status !== 'inactivo') {
                         if (d.shift !== 'R' || (d.shift === 'R')) {
-                            // Only difference is R can be clicked but not painted over unless undone,
-                            // but we'll let delegation logic handle the constraints.
-                            interactData = `data-entry="${d.entry_id}" data-worker-name="${w.name}" data-day="${d.day}" data-shift="${d.shift}" data-allowed="${w.allowed_shifts}" class="cell-shift ${shiftClass} interactive-cell"`;
+                            interactData = `data-worker-id="${w.id}" data-worker-name="${w.name}" data-day="${d.day}" data-shift="${d.shift || ''}" data-allowed="${w.allowed_shifts}" class="cell-shift ${shiftClass} interactive-cell"`;
                         } else {
-                            interactData = `data-entry="${d.entry_id}" class="cell-shift ${shiftClass}"`;
+                            interactData = `class="cell-shift ${shiftClass}"`;
                         }
                     } else {
-                        interactData = `data-entry="${d.entry_id}" class="cell-shift ${shiftClass}"`;
+                        interactData = `class="cell-shift ${shiftClass}"`;
                     }
                     
                     html += `<td ${interactData}>${d.shift}</td>`;
@@ -147,12 +145,13 @@ document.addEventListener('mousedown', (e) => {
     const cell = e.target.closest('td.interactive-cell');
     if (!cell) return;
     
-    const entryId = cell.getAttribute('data-entry');
+    const workerId = cell.getAttribute('data-worker-id');
+    const day = cell.getAttribute('data-day');
     const allowed = cell.getAttribute('data-allowed') || 'M,T,N';
     const currentShift = cell.getAttribute('data-shift');
     
     if (currentShift !== 'R') {
-        startPainting(entryId, allowed, cell);
+        startPainting(workerId, day, allowed, cell);
     }
 });
 
@@ -161,12 +160,13 @@ document.addEventListener('mouseover', (e) => {
     const cell = e.target.closest('td.interactive-cell');
     if (!cell) return;
     
-    const entryId = cell.getAttribute('data-entry');
+    const workerId = cell.getAttribute('data-worker-id');
+    const day = cell.getAttribute('data-day');
     const allowed = cell.getAttribute('data-allowed') || 'M,T,N';
     const currentShift = cell.getAttribute('data-shift');
     
     if (currentShift !== 'R') {
-        continuePainting(entryId, allowed, cell);
+        continuePainting(workerId, day, allowed, cell);
     }
 });
 
@@ -177,29 +177,30 @@ document.addEventListener('click', (e) => {
     // Ignore clicks if painting is active
     if (currentBrush) return;
     
-    const entryId = cell.getAttribute('data-entry');
+    const workerId = cell.getAttribute('data-worker-id');
     const workerName = cell.getAttribute('data-worker-name');
     const day = cell.getAttribute('data-day');
     const shift = cell.getAttribute('data-shift');
     const allowed = cell.getAttribute('data-allowed') || 'M,T,N';
     
-    handleCellClick(entryId, workerName, day, shift, allowed, cell);
+    handleCellClick(workerId, workerName, day, shift, allowed, cell);
 });
 
-async function silentUpdateShift(entryId, newShift, cellElement) {
+async function silentUpdateShift(workerId, day, newShift, cellElement) {
     if (!newShift) return;
     
     // Optimistic UI update
     const oldShift = cellElement.textContent;
     cellElement.className = `cell-shift shift-${newShift}`;
     cellElement.textContent = newShift;
+    cellElement.setAttribute('data-shift', newShift);
     cellElement.classList.add('shift-painting'); // small pulse effect
     setTimeout(() => cellElement.classList.remove('shift-painting'), 600);
 
     try {
-        await apiFetch(`/api/schedule/entry/${entryId}`, {
-            method: 'PUT',
-            body: JSON.stringify({ shift_code: newShift }),
+        await apiFetch(`/api/schedule/entry`, {
+            method: 'POST',
+            body: JSON.stringify({ worker_id: parseInt(workerId), year: currentYear, month: currentMonth, day: parseInt(day), shift_code: newShift }),
         });
         
         // If it was an 'R', it might affect other days, reloading is safer but 
@@ -211,38 +212,36 @@ async function silentUpdateShift(entryId, newShift, cellElement) {
         // Revert on error
         cellElement.className = `cell-shift shift-${oldShift}`;
         cellElement.textContent = oldShift;
-        showFlash('Error al guardar cambio', 'error');
+        cellElement.setAttribute('data-shift', oldShift);
+        showFlash(e.message || 'Error al guardar cambio', 'error');
     }
 }
 
-function startPainting(entryId, allowedShifts, cellElement) {
+function startPainting(workerId, day, allowedShifts, cellElement) {
     if (!currentBrush) return;
     if (['M', 'T', 'N'].includes(currentBrush)) {
         const allowed = allowedShifts.split(',');
         if (!allowed.includes(currentBrush)) {
-            showFlash('Turno no permitido para este trabajador', 'warning');
+            showFlash('Turno no permitido', 'warning');
             return;
         }
     }
     isPainting = true;
-    silentUpdateShift(entryId, currentBrush, cellElement);
+    silentUpdateShift(workerId, day, currentBrush, cellElement);
 }
 
-function continuePainting(entryId, allowedShifts, cellElement) {
+function continuePainting(workerId, day, allowedShifts, cellElement) {
     if (!isPainting || !currentBrush) return;
     if (['M', 'T', 'N'].includes(currentBrush)) {
         const allowed = allowedShifts.split(',');
         if (!allowed.includes(currentBrush)) return;
     }
-    silentUpdateShift(entryId, currentBrush, cellElement);
+    silentUpdateShift(workerId, day, currentBrush, cellElement);
 }
 
-function handleCellClick(entryId, workerName, day, currentShift, allowedShifts, cellElement) {
-    // If brush is active, startPainting already handled it via mousedown.
+function handleCellClick(workerId, workerName, day, currentShift, allowedShifts, cellElement) {
     if (currentBrush) return;
-    
-    // Fallback to modal if no brush is selected
-    openShiftModal(entryId, workerName, day, currentShift, allowedShifts);
+    openShiftModal(workerId, workerName, day, currentShift, allowedShifts);
 }
 
 function _getGroupLabel(filter) {
@@ -288,10 +287,11 @@ async function generateSchedule(projectYear = false) {
 }
 
 /* ===== SHIFT EDIT MODAL ===== */
-function openShiftModal(entryId, workerName, day, currentShift, allowedShifts) {
+function openShiftModal(workerId, workerName, day, currentShift, allowedShifts) {
     document.getElementById('shift-modal-info').textContent = `${workerName} — Día ${day}`;
-    document.getElementById('shift-select').value = currentShift;
-    document.getElementById('shift-entry-id').value = entryId;
+    document.getElementById('shift-select').value = currentShift || 'M';
+    document.getElementById('shift-worker-id').value = workerId;
+    document.getElementById('shift-day').value = day;
     
     // Disable disallowed options
     const select = document.getElementById('shift-select');
@@ -312,19 +312,20 @@ function closeShiftModal() {
 }
 
 async function saveShiftChange() {
-    const entryId = document.getElementById('shift-entry-id').value;
+    const workerId = document.getElementById('shift-worker-id').value;
+    const day = document.getElementById('shift-day').value;
     const newShift = document.getElementById('shift-select').value;
 
     try {
-        await apiFetch(`/api/schedule/entry/${entryId}`, {
-            method: 'PUT',
-            body: JSON.stringify({ shift_code: newShift }),
+        await apiFetch(`/api/schedule/entry`, {
+            method: 'POST',
+            body: JSON.stringify({ worker_id: parseInt(workerId), year: currentYear, month: currentMonth, day: parseInt(day), shift_code: newShift }),
         });
         showFlash('Turno actualizado');
         closeShiftModal();
         loadSchedule();
     } catch (e) {
-        // handled
+        showFlash(e.message || 'Error', 'error');
     }
 }
 

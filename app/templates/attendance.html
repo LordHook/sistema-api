@@ -25,6 +25,16 @@
             <button class="brush-btn" data-shift="A" onclick="setBrush('A')" style="background: rgba(34, 197, 94, 0.15); border: 1px solid var(--accent-green); color: var(--accent-green); padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold;">A (Asistiendo)</button>
             <button class="brush-btn" data-shift="F" onclick="setBrush('F')" style="background: rgba(239, 68, 68, 0.15); border: 1px solid var(--accent-red); color: var(--accent-red); padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold;">F (Falta)</button>
             
+            <!-- Exception Statuses -->
+            <button class="brush-btn" data-shift="PO" onclick="setBrush('PO')" style="background: rgba(99, 102, 241, 0.15); border: 1px solid #6366f1; color: #6366f1; padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold;">PO</button>
+            <button class="brush-btn" data-shift="PC" onclick="setBrush('PC')" style="background: rgba(168, 85, 247, 0.15); border: 1px solid #a855f7; color: #a855f7; padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold;">PC</button>
+            <button class="brush-btn" data-shift="PV" onclick="setBrush('PV')" style="background: rgba(236, 72, 153, 0.15); border: 1px solid #ec4899; color: #ec4899; padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold;">PV</button>
+            <button class="brush-btn" data-shift="DM" onclick="setBrush('DM')" style="background: rgba(20, 184, 166, 0.15); border: 1px solid #14b8a6; color: #14b8a6; padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold;">DM</button>
+            <button class="brush-btn" data-shift="V" onclick="setBrush('V')" style="background: rgba(132, 204, 22, 0.15); border: 1px solid #84cc16; color: #84cc16; padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold;">V</button>
+            <button class="brush-btn" data-shift="LM" onclick="setBrush('LM')" style="background: rgba(217, 70, 239, 0.15); border: 1px solid #d946ef; color: #d946ef; padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold;">LM</button>
+            <button class="brush-btn" data-shift="LE" onclick="setBrush('LE')" style="background: rgba(163, 163, 163, 0.15); border: 1px solid #a3a3a3; color: #a3a3a3; padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold;">LE</button>
+            <button class="brush-btn" data-shift="PS" onclick="setBrush('PS')" style="background: rgba(249, 115, 22, 0.15); border: 1px solid #f97316; color: #f97316; padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold;">PS</button>
+            <button class="brush-btn" data-shift="NI" onclick="setBrush('NI')" style="background: var(--bg-secondary); border: 1px solid #4ade80; color: #555; padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold;">NI</button>
             <button class="brush-btn active" data-shift="" onclick="setBrush('')" style="background: var(--bg-primary); border: 1px solid var(--border-color); color: var(--text-secondary); padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold; margin-left: 0.5rem;" title="Desactivar Pincel">✖ Apagar</button>
         </div>
         <span style="font-size: 0.75rem; color: var(--text-muted); margin-left: auto;">* Selecciona un estado y arrastra sobre las celdas para pintar la asistencia</span>
@@ -98,6 +108,15 @@
                 <select class="form-control" id="status-select">
                     <option value="A">A - Asistió</option>
                     <option value="F">F - Falta</option>
+                    <option value="PO">PO - Permiso Onomástico</option>
+                    <option value="PC">PC - Permiso Comisión</option>
+                    <option value="PV">PV - Permiso Vacaciones</option>
+                    <option value="DM">DM - Descanso Médico</option>
+                    <option value="V">V - Vacaciones</option>
+                    <option value="LM">LM - Lic. Maternidad</option>
+                    <option value="LE">LE - Lic. Extraordinarias</option>
+                    <option value="PS">PS - Sindicato</option>
+                    <option value="NI">NI - No Ingresado</option>
                 </select>
             </div>
         </div>
