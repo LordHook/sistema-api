@@ -92,7 +92,7 @@ def post_attendance():
 
     return jsonify({
         'message': 'Asistencia registrada',
-        'id': record.id,
+        'id': record.id if record else None,
     })
 
 
