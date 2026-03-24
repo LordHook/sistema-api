@@ -154,33 +154,58 @@ def create_or_update_entry():
             _, num_days = calendar.monthrange(year, month)
             
             if new_shift == 'D':
-                # Autocomplete future 'D's (+8 logic)
-                next_d = day + 8
-                while next_d <= num_days:
-                    existing_entry = ScheduleEntry.query.filter_by(worker_id=worker_id, year=year, month=month, day=next_d).first()
-                    if existing_entry:
-                        if existing_entry.shift_code != 'R': # Never overwrite R
-                            existing_entry.shift_code = 'D'
-                            existing_entry.is_auto_generated = True
+                curr_rest_day = day
+                target_date = date(year, month, day)
+                pending_extra_rest = False
+                if target_date.weekday() == 6: # Sunday
+                    pending_extra_rest = True
+                    
+                for curr_d in range(day + 1, num_days + 1):
+                    dt = date(year, month, curr_d)
+                    assign_d = False
+                    
+                    if pending_extra_rest:
+                        assign_d = True
+                        pending_extra_rest = False
+                        curr_rest_day = curr_d
                     else:
-                        new_entry = ScheduleEntry(worker_id=worker_id, year=year, month=month, day=next_d, shift_code='D', is_auto_generated=True)
-                        db.session.add(new_entry)
-                    next_d += 8
+                        days_since_rest = curr_d - curr_rest_day
+                        if days_since_rest >= 8:
+                            assign_d = True
+                            if dt.weekday() == 6: # Sunday
+                                pending_extra_rest = True
+                            else:
+                                curr_rest_day = curr_d
+                                
+                    if assign_d:
+                        existing_entry = ScheduleEntry.query.filter_by(worker_id=worker_id, year=year, month=month, day=curr_d).first()
+                        if existing_entry:
+                            if existing_entry.shift_code != 'R':
+                                existing_entry.shift_code = 'D'
+                                existing_entry.is_auto_generated = True
+                        else:
+                            new_entry = ScheduleEntry(worker_id=worker_id, year=year, month=month, day=curr_d, shift_code='D', is_auto_generated=True)
+                            db.session.add(new_entry)
 
             elif new_shift in ['M', 'T', 'N']:
                 rotation = {'M': 'N', 'N': 'T', 'T': 'M'}
                 active_shift = new_shift
+                last_was_d = False
+                
                 # Autocomplete future work days until end of month
                 for d in range(day + 1, num_days + 1):
                     existing_entry = ScheduleEntry.query.filter_by(worker_id=worker_id, year=year, month=month, day=d).first()
                     
                     if existing_entry and existing_entry.shift_code == 'D':
                         # Valid rotation boundary hit!
-                        active_shift = rotation[active_shift]
+                        if not last_was_d:
+                            active_shift = rotation[active_shift]
+                            last_was_d = True
                     elif existing_entry and existing_entry.shift_code in ['R', 'CLEAR', 'NI']:
                         # Skip special locks
                         pass
                     else:
+                        last_was_d = False
                         if existing_entry:
                             existing_entry.shift_code = active_shift
                             existing_entry.is_auto_generated = True
