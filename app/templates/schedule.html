@@ -28,6 +28,7 @@
 {% endblock %}
 
 {% block content %}
+<div class="sticky-toolbar" style="position: sticky; top: 0; z-index: 1050; background-color: var(--bg-primary); padding-top: 1rem; margin-top: -1rem; padding-bottom: 0.5rem; margin-bottom: 1rem;">
 {% if current_user.is_admin %}
 <div class="card mb-4" style="background-color: var(--bg-tertiary); padding: 0.5rem 1rem; margin-bottom: 1rem;">
     <div class="d-flex align-center gap-1">
@@ -78,6 +79,7 @@
     <button class="group-tab group-tab-3" data-group="3" onclick="filterByGroup('3')" id="tab-group-3">
         🟣 Grupo 3
     </button>
+</div>
 </div>
 
 <div class="card">

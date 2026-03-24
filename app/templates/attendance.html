@@ -17,7 +17,8 @@
 {% endblock %}
 
 {% block content %}
-<div class="card mb-4" id="brush-palette" style="position: sticky; top: 0; z-index: 1000; border-bottom: 1px solid var(--border-color); background-color: var(--bg-tertiary); padding: 0.5rem 1rem; margin-bottom: 1rem; display: none;">
+<div class="sticky-toolbar" style="position: sticky; top: 0; z-index: 1050; background-color: var(--bg-primary); padding-top: 1rem; margin-top: -1rem; padding-bottom: 0.5rem; margin-bottom: 1rem;">
+<div class="card mb-4" id="brush-palette" style="background-color: var(--bg-tertiary); padding: 0.5rem 1rem; margin-bottom: 1rem; display: none;">
     <div class="d-flex align-center gap-1">
         <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin-right: 1rem;">Modo Pincel (Edición Rápida de Asistencia):</span>
         <div class="brush-palette d-flex gap-1" style="flex-wrap: wrap;">
@@ -66,6 +67,8 @@
     <button class="group-tab group-tab-3" data-group="3" onclick="filterByGroup('3')" id="tab-group-3">
         🟣 Grupo 3
     </button>
+</div>
+</div>
 </div>
 
 <div class="card p-0">
