@@ -43,9 +43,15 @@ def get_attendance_grid():
     grid = get_schedule_grid(year, month, group_filter=group, user_role=current_user.role)
 
     # Fetch all attendance records for this month
+    from app.extensions import db
+    import calendar
+    _, last_day = calendar.monthrange(year, month)
+    start_date = date(year, month, 1)
+    end_date = date(year, month, last_day)
+    
     records = AttendanceRecord.query.filter(
-        extract('year', AttendanceRecord.attendance_date) == year,
-        extract('month', AttendanceRecord.attendance_date) == month
+        AttendanceRecord.attendance_date >= start_date,
+        AttendanceRecord.attendance_date <= end_date
     ).all()
     
     # Map by (worker_id, day)
