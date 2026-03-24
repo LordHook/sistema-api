@@ -28,11 +28,9 @@
                     <a href="{{ url_for('dashboard.dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard.dashboard' %}active{% endif %}" id="nav-dashboard">
                         <span class="nav-icon">📊</span> Dashboard
                     </a>
-                    {% if current_user.is_admin %}
                     <a href="{{ url_for('schedule.schedule_page') }}" class="nav-link {% if request.endpoint == 'schedule.schedule_page' %}active{% endif %}" id="nav-schedule">
                         <span class="nav-icon">📅</span> Rol de Servicio
                     </a>
-                    {% endif %}
                     <a href="{{ url_for('attendance.attendance_page') }}" class="nav-link {% if request.endpoint == 'attendance.attendance_page' %}active{% endif %}" id="nav-attendance">
                         <span class="nav-icon">✅</span> Asistencia
                     </a>
