@@ -151,6 +151,7 @@ def create_or_update_entry():
         # NEW AUTO-COMPLETE LOGIC FOR SECTION D and TD
         if worker and worker.section in ['D', 'TD']:
             import calendar
+            from datetime import date
             _, num_days = calendar.monthrange(year, month)
             
             if new_shift == 'D':
@@ -165,22 +166,24 @@ def create_or_update_entry():
                     assign_d = False
                     
                     if pending_extra_rest:
+                        # Exactly Lunes after Domingo Doble
                         assign_d = True
                         pending_extra_rest = False
-                        curr_rest_day = curr_d
+                        curr_rest_day = curr_d # Lunes is the new anchor for the strict +7 day cycle
                     else:
                         days_since_rest = curr_d - curr_rest_day
-                        if days_since_rest >= 8:
+                        if days_since_rest >= 7: # Strict 7-day calendar leap
                             assign_d = True
-                            if dt.weekday() == 6: # Sunday
+                            if dt.weekday() == 6: # Next rest falls on Sunday
                                 pending_extra_rest = True
+                                # Wait until tomorrow to shift the anchor
                             else:
                                 curr_rest_day = curr_d
                                 
                     if assign_d:
                         existing_entry = ScheduleEntry.query.filter_by(worker_id=worker_id, year=year, month=month, day=curr_d).first()
                         if existing_entry:
-                            if existing_entry.shift_code != 'R':
+                            if existing_entry.shift_code not in ['R', 'CLEAR', 'NI']:
                                 existing_entry.shift_code = 'D'
                                 existing_entry.is_auto_generated = True
                         else:
@@ -194,15 +197,21 @@ def create_or_update_entry():
                 
                 # Autocomplete future work days until end of month
                 for d in range(day + 1, num_days + 1):
+                    dt = date(year, month, d)
                     existing_entry = ScheduleEntry.query.filter_by(worker_id=worker_id, year=year, month=month, day=d).first()
                     
+                    # Detect Monday for blind weekly rotation (if NO rests are scheduled)
+                    if dt.weekday() == 0 and not last_was_d:
+                        # Ensures the shift rotates at the start of the week IF we aren't already rotating from a 'D'
+                        active_shift = rotation[active_shift]
+                    
                     if existing_entry and existing_entry.shift_code == 'D':
-                        # Valid rotation boundary hit!
+                        # Valid rotation boundary hit! (End of work cycle)
                         if not last_was_d:
                             active_shift = rotation[active_shift]
                             last_was_d = True
                     elif existing_entry and existing_entry.shift_code in ['R', 'CLEAR', 'NI']:
-                        # Skip special locks
+                        # Skip special locks and freezes
                         pass
                     else:
                         last_was_d = False
