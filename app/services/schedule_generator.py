@@ -286,6 +286,12 @@ def get_schedule_grid(year, month, group_filter=None, user_role='admin'):
     workers = Worker.query.order_by(Worker.section, Worker.group_number,
                                      Worker.order_number).all()
 
+    # MIGRAR A TURNO DIFERENCIADO (TD)
+    for w in workers:
+        name_upper = (w.full_name or '').upper()
+        if 'GUERRERO VALLEJO' in name_upper or 'VASQUEZ ESTRELLA' in name_upper:
+            w.section = 'TD'
+
     # Filter to relevant workers
     relevant_workers = []
     for w in workers:
@@ -305,13 +311,14 @@ def get_schedule_grid(year, month, group_filter=None, user_role='admin'):
     # Apply group filter
     if group_filter and group_filter != 'all':
         if group_filter == 'staff':
-            relevant_workers = [w for w in relevant_workers if w.section in ('A', 'B', 'C')]
+            relevant_workers = [w for w in relevant_workers if w.section in ('A', 'B', 'C', 'TD')]
         elif group_filter.isdigit():
             gnum = int(group_filter)
             relevant_workers = [w for w in relevant_workers
                                 if (w.section == 'D' and (w.group_number or 1) == gnum) 
                                 or w.section == 'B'
-                                or (w.section == 'C' and w.group_number == gnum)]
+                                or (w.section == 'C' and w.group_number == gnum)
+                                or w.section == 'TD']
 
     # Security Rules: Hide Section A from Supervisors.
     # We already filtered them, but enforce strictly here.
@@ -356,6 +363,15 @@ def _build_sections(workers, entry_map, num_days, group_filter=None):
     if group_filter and group_filter.isdigit():
         gnum = int(group_filter)
         
+        # Sec TD (Turno Diferenciado)
+        td_workers = [w for w in workers if w.section == 'TD']
+        if td_workers:
+            sections.append({
+                'key': 'TD',
+                'name': 'Personal Turno Diferenciado',
+                'groups': [{'label': '----- TURNO DIFERENCIADO -----', 'rows': _build_worker_rows(td_workers, entry_map, num_days)['rows']}],
+            })
+
         # Sec B
         sec_b = [w for w in workers if w.section == 'B']
         if sec_b:
@@ -388,7 +404,7 @@ def _build_sections(workers, entry_map, num_days, group_filter=None):
                 if area_workers:
                     d_groups.append({
                         'label': f'----- OPERADORES {area} -----',
-                        'rows': _build_worker_rows(area_workers, entry_map, num_days)['rows'],
+                        'rows': _build_worker_rows(area_workers, entry_map, num_days, sort_by_pattern=(area in ['CCO', 'SCV']))['rows'],
                     })
 
             if d_groups:
@@ -402,18 +418,19 @@ def _build_sections(workers, entry_map, num_days, group_filter=None):
 
     # Normal view (all or staff)
     section_config = [
-        ('A', 'Jefatura CCO, Planta Externa, Encargados y Coordinadores', None),
-        ('B', 'Área de Gestión de Video', None),
-        ('C', 'Supervisores', None),
+        ('A', 'Jefatura CCO, Planta Externa, Encargados y Coordinadores', False),
+        ('B', 'Área de Gestión de Video', False),
+        ('C', 'Supervisores', False),
+        ('TD', 'Personal Turno Diferenciado', False),
     ]
 
-    for sec_key, sec_name, _ in section_config:
+    for sec_key, sec_name, do_sort in section_config:
         sec_workers = [w for w in workers if w.section == sec_key]
         if sec_workers:
             sections.append({
                 'key': sec_key,
                 'name': sec_name,
-                'groups': [_build_worker_rows(sec_workers, entry_map, num_days)],
+                'groups': [_build_worker_rows(sec_workers, entry_map, num_days, sort_by_pattern=do_sort)],
             })
 
     # Section D - show if 'all' or no filter
@@ -435,7 +452,7 @@ def _build_sections(workers, entry_map, num_days, group_filter=None):
                     if area_workers:
                         d_groups.append({
                             'label': f'Grupo {group_num} - {area}',
-                            'rows': _build_worker_rows(area_workers, entry_map, num_days)['rows'],
+                            'rows': _build_worker_rows(area_workers, entry_map, num_days, sort_by_pattern=(area in ['CCO', 'SCV']))['rows'],
                         })
 
             if d_groups:
@@ -448,7 +465,7 @@ def _build_sections(workers, entry_map, num_days, group_filter=None):
     return sections
 
 
-def _build_worker_rows(workers, entry_map, num_days):
+def _build_worker_rows(workers, entry_map, num_days, sort_by_pattern=False):
     """Builds row data for a list of workers."""
     rows = []
     for w in workers:
@@ -475,5 +492,9 @@ def _build_worker_rows(workers, entry_map, num_days):
             },
             'days': days,
         })
+        
+    if sort_by_pattern:
+        rows.sort(key=lambda r: ("".join(d['shift'] or '_' for d in r['days']), r['worker']['order_number'] or 0))
+        
     return {'rows': rows}
 
