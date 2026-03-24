@@ -37,6 +37,8 @@
             <button class="brush-btn" data-shift="T" onclick="setBrush('T')" style="background: rgba(245, 158, 11, 0.15); border: 1px solid var(--accent-amber); color: var(--accent-amber); padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold;">T</button>
             <button class="brush-btn" data-shift="N" onclick="setBrush('N')" style="background: rgba(99, 102, 241, 0.15); border: 1px solid var(--accent-indigo); color: var(--accent-indigo); padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold;">N</button>
             <button class="brush-btn" data-shift="D" onclick="setBrush('D')" style="background: rgba(59, 130, 246, 0.15); border: 1px solid var(--accent-blue); color: var(--accent-blue); padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold;">D</button>
+            <button class="brush-btn" data-shift="CLEAR" onclick="setBrush('CLEAR')" style="background: var(--bg-primary); border: 1px dashed var(--text-muted); color: var(--text-primary); padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold; margin-left: 0.5rem;" title="Borrador">🧹 Borrar</button>
+            
             <button class="brush-btn" data-shift="PO" onclick="setBrush('PO')" style="background: rgba(99, 102, 241, 0.15); border: 1px solid #6366f1; color: #6366f1; padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold;">PO</button>
             <button class="brush-btn" data-shift="PC" onclick="setBrush('PC')" style="background: rgba(168, 85, 247, 0.15); border: 1px solid #a855f7; color: #a855f7; padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold;">PC</button>
             <button class="brush-btn" data-shift="PV" onclick="setBrush('PV')" style="background: rgba(236, 72, 153, 0.15); border: 1px solid #ec4899; color: #ec4899; padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-weight: bold;">PV</button>
@@ -128,6 +130,7 @@
             <div class="form-group">
                 <label for="shift-select">Nuevo Turno</label>
                 <select class="form-control" id="shift-select">
+                    <option value="CLEAR">🧹 Limpiar (Borrador)</option>
                     <option value="M">M - Mañana</option>
                     <option value="T">T - Tarde</option>
                     <option value="N">N - Noche</option>

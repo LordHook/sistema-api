@@ -192,10 +192,18 @@ async function silentUpdateShift(workerId, day, newShift, cellElement) {
     
     // Optimistic UI update
     const oldShift = cellElement.textContent;
-    cellElement.className = `cell-shift shift-${newShift}`;
-    cellElement.textContent = newShift;
-    cellElement.setAttribute('data-shift', newShift);
-    cellElement.classList.add('shift-painting'); // small pulse effect
+    const oldClass = cellElement.className;
+    
+    if (newShift === 'CLEAR') {
+        cellElement.className = 'cell-shift interactive-cell shift-painting';
+        cellElement.textContent = '';
+        cellElement.setAttribute('data-shift', '');
+    } else {
+        cellElement.className = `cell-shift interactive-cell shift-${newShift} shift-painting`;
+        cellElement.textContent = newShift;
+        cellElement.setAttribute('data-shift', newShift);
+    }
+    
     setTimeout(() => cellElement.classList.remove('shift-painting'), 600);
 
     try {

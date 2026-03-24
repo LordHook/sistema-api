@@ -102,12 +102,27 @@ def create_or_update_entry():
     old_shift = entry.shift_code if entry else None
 
     if new_shift and new_shift != old_shift:
-        # Validate allowed shifts
+        # Validate allowed shifts if it is M, T, or N
         worker = Worker.query.get(worker_id)
         if worker and new_shift in ['M', 'T', 'N']:
             allowed = (worker.allowed_shifts or 'M,T,N').split(',')
             if new_shift not in allowed:
                 return jsonify({'error': f'El trabajador no tiene habilitado el turno {new_shift}'}), 400
+
+        if new_shift == 'CLEAR':
+            if entry:
+                db.session.delete(entry)
+                AuditLog.log(
+                    user_id=current_user.id,
+                    action='schedule_change',
+                    target_worker_id=worker_id,
+                    target_date=date(year, month, day),
+                    old_value=old_shift,
+                    new_value='vacio',
+                    details='Turno borrado manualmente'
+                )
+                db.session.commit()
+            return jsonify({'message': 'Entrada borrada'})
                 
         if not entry:
             entry = ScheduleEntry(worker_id=worker_id, year=year, month=month, day=day, is_auto_generated=False)
@@ -122,16 +137,16 @@ def create_or_update_entry():
                 worker.resignation_date = date(year, month, day)
             
             # Auto-fill R to the end of the month
-            subsequent_entries = ScheduleEntry.query.filter(
-                ScheduleEntry.worker_id == worker_id,
-                ScheduleEntry.year == year,
-                ScheduleEntry.month == month,
-                ScheduleEntry.day > day
-            ).all()
-
-            for sub_entry in subsequent_entries:
-                sub_entry.shift_code = 'R'
-                sub_entry.is_auto_generated = True
+            import calendar
+            _, num_days = calendar.monthrange(year, month)
+            for d in range(day + 1, num_days + 1):
+                existing_entry = ScheduleEntry.query.filter_by(worker_id=worker_id, year=year, month=month, day=d).first()
+                if existing_entry:
+                    existing_entry.shift_code = 'R'
+                    existing_entry.is_auto_generated = True
+                else:
+                    new_entry = ScheduleEntry(worker_id=worker_id, year=year, month=month, day=d, shift_code='R', is_auto_generated=True)
+                    db.session.add(new_entry)
 
         AuditLog.log(
             user_id=current_user.id,
