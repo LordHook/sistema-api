@@ -172,7 +172,7 @@ def create_or_update_entry():
                         curr_rest_day = curr_d # Lunes is the new anchor for the strict +7 day cycle
                     else:
                         days_since_rest = curr_d - curr_rest_day
-                        if days_since_rest >= 7: # Strict 7-day calendar leap
+                        if days_since_rest >= 8: # Escalonado 8-day calendar leap
                             assign_d = True
                             if dt.weekday() == 6: # Next rest falls on Sunday
                                 pending_extra_rest = True
