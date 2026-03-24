@@ -148,6 +148,46 @@ def create_or_update_entry():
                     new_entry = ScheduleEntry(worker_id=worker_id, year=year, month=month, day=d, shift_code='R', is_auto_generated=True)
                     db.session.add(new_entry)
 
+        # NEW AUTO-COMPLETE LOGIC FOR SECTION D and TD
+        if worker and worker.section in ['D', 'TD']:
+            import calendar
+            _, num_days = calendar.monthrange(year, month)
+            
+            if new_shift == 'D':
+                # Autocomplete future 'D's (+8 logic)
+                next_d = day + 8
+                while next_d <= num_days:
+                    existing_entry = ScheduleEntry.query.filter_by(worker_id=worker_id, year=year, month=month, day=next_d).first()
+                    if existing_entry:
+                        if existing_entry.shift_code != 'R': # Never overwrite R
+                            existing_entry.shift_code = 'D'
+                            existing_entry.is_auto_generated = True
+                    else:
+                        new_entry = ScheduleEntry(worker_id=worker_id, year=year, month=month, day=next_d, shift_code='D', is_auto_generated=True)
+                        db.session.add(new_entry)
+                    next_d += 8
+
+            elif new_shift in ['M', 'T', 'N']:
+                rotation = {'M': 'N', 'N': 'T', 'T': 'M'}
+                active_shift = new_shift
+                # Autocomplete future work days until end of month
+                for d in range(day + 1, num_days + 1):
+                    existing_entry = ScheduleEntry.query.filter_by(worker_id=worker_id, year=year, month=month, day=d).first()
+                    
+                    if existing_entry and existing_entry.shift_code == 'D':
+                        # Valid rotation boundary hit!
+                        active_shift = rotation[active_shift]
+                    elif existing_entry and existing_entry.shift_code in ['R', 'CLEAR', 'NI']:
+                        # Skip special locks
+                        pass
+                    else:
+                        if existing_entry:
+                            existing_entry.shift_code = active_shift
+                            existing_entry.is_auto_generated = True
+                        else:
+                            new_entry = ScheduleEntry(worker_id=worker_id, year=year, month=month, day=d, shift_code=active_shift, is_auto_generated=True)
+                            db.session.add(new_entry)
+
         AuditLog.log(
             user_id=current_user.id,
             action='schedule_change',

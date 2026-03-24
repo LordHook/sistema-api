@@ -212,10 +212,10 @@ async function silentUpdateShift(workerId, day, newShift, cellElement) {
             body: JSON.stringify({ worker_id: parseInt(workerId), year: currentYear, month: currentMonth, day: parseInt(day), shift_code: newShift }),
         });
         
-        // If it was an 'R', it might affect other days, reloading is safer but 
-        // for speed we won't reload automatically unless requested.
-        if (newShift === 'R') {
-            loadSchedule(); // Real reload to get cascaded R's
+        // Optimistic UI updates are fast, but for cascaded shifts (R, D, M, T, N) 
+        // we reload the grid to reflect auto-generated downstream entries.
+        if (['R', 'D', 'M', 'T', 'N'].includes(newShift)) {
+            setTimeout(() => loadSchedule(), 400); 
         }
     } catch (e) {
         // Revert on error
