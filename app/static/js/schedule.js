@@ -44,6 +44,7 @@ async function loadSchedule() {
         const grid = await apiFetch(url);
         document.getElementById('month-label').textContent = `${grid.month_name} ${grid.year}`;
         renderScheduleGrid(grid);
+        setTimeout(() => filterWorkersByText('worker-search', 'schedule-container'), 100);
     } catch (e) {
         container.innerHTML = '<div class="empty-state"><div class="empty-icon">📅</div><h4>Error al cargar el horario</h4></div>';
     }
@@ -104,7 +105,7 @@ function renderScheduleGrid(grid) {
             const rows = group.rows || [];
             rows.forEach(row => {
                 const w = row.worker;
-                html += '<tr>';
+                html += '<tr class="worker-row">';
                 html += `<td style="font-size:0.75rem;color:var(--text-muted);">${w.order_number}</td>`;
                 html += `<td><span class="badge badge-${w.regime.toLowerCase()}" style="font-size:0.65rem;">${w.regime}</span></td>`;
 
@@ -327,6 +328,32 @@ async function saveShiftChange() {
     } catch (e) {
         showFlash(e.message || 'Error', 'error');
     }
+}
+
+/* ===== ENHANCED SEARCH LOGIC ===== */
+document.addEventListener('DOMContentLoaded', () => {
+    const searchInput = document.getElementById('worker-search');
+    if (searchInput) {
+        searchInput.addEventListener('input', () => filterWorkersByText('worker-search', 'schedule-container'));
+    }
+});
+
+function filterWorkersByText(inputId, containerId) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    const filterText = input.value.toLowerCase().trim();
+    
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    
+    const rows = container.querySelectorAll('tr.worker-row');
+    rows.forEach(row => {
+        const nameCell = row.querySelector('.cell-name');
+        if (nameCell) {
+            const name = nameCell.textContent.toLowerCase();
+            row.style.display = name.includes(filterText) ? '' : 'none';
+        }
+    });
 }
 
 /* ===== EXPORT ===== */

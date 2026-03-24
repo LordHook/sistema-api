@@ -48,7 +48,8 @@ async function loadAttendanceGrid() {
         }
         const grid = await apiFetch(url);
         
-        document.getElementById('current-month-label').textContent = `${grid.month_name} ${grid.year}`;
+        document.getElementById('month-label').textContent = `${grid.month_name} ${grid.year}`;
+        setTimeout(() => filterWorkersByText('worker-search', 'attendance-container'), 100);
         
         currentDayBackend = grid.current_day;
         realYear = grid.real_year;
@@ -63,7 +64,7 @@ async function loadAttendanceGrid() {
         }
         
         renderAttendanceGrid(grid);
-    } catch (e) {
+    } catch (error) {
         container.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><h4>Error al cargar la asistencia</h4></div>';
     }
 }
@@ -138,7 +139,7 @@ function renderAttendanceGrid(grid) {
                 const w = row.worker;
                 let nameStyle = w.status === 'inactivo' ? 'color:var(--accent-red);text-decoration:line-through;' : '';
                 
-                html += '<tr>';
+                html += `<tr class="worker-row">`;
                 html += `<td style="font-size:0.75rem;color:var(--text-muted);">${w.order_number}</td>`;
                 html += `<td><span class="badge badge-${w.regime.toLowerCase()}" style="font-size:0.65rem;">${w.regime}</span></td>`;
                 html += `<td class="cell-name" style="${nameStyle}" title="${w.name}">${w.name}</td>`;
@@ -264,6 +265,7 @@ async function silentUpdateStatus(workerId, day, newStatus, cellElement) {
     
     // Optistic UI
     const oldClassName = cellElement.className;
+    const oldHtml = cellElement.innerHTML; // Store old HTML to revert on error
     
     if (newStatus === 'CLEAR') {
         cellElement.className = 'cell-shift cell-att editable-cell interactive-att-cell shift-painting';
@@ -293,11 +295,11 @@ async function silentUpdateStatus(workerId, day, newStatus, cellElement) {
             throw new Error(data.error || 'Error desconocido');
         }
         
-    } catch (e) {
+    } catch (error) {
         // Revert on error
         cellElement.className = oldClassName;
         cellElement.innerHTML = oldHtml;
-        showFlash(e.message || 'Error al guardar asistencia', 'error');
+        showFlash(error.message || 'Error al guardar asistencia', 'error');
     }
 }
 
@@ -346,9 +348,36 @@ async function saveStatus() {
 
         closeAttendanceModal();
         loadAttendanceGrid();
-    } catch (e) {
-        showFlash(e.message || 'Error al guardar asistencia', 'error');
+    } catch (error) {
+        console.error('Error cargando meses:', error);
+        showFlash(error.message || 'Error al guardar asistencia', 'error');
     }
+}
+
+/* ===== ENHANCED SEARCH LOGIC ===== */
+document.addEventListener('DOMContentLoaded', () => {
+    const searchInput = document.getElementById('worker-search');
+    if (searchInput) {
+        searchInput.addEventListener('input', () => filterWorkersByText('worker-search', 'attendance-container'));
+    }
+});
+
+function filterWorkersByText(inputId, containerId) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    const filterText = input.value.toLowerCase().trim();
+    
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    
+    const rows = container.querySelectorAll('tr.worker-row');
+    rows.forEach(row => {
+        const nameCell = row.querySelector('.cell-name');
+        if (nameCell) {
+            const name = nameCell.textContent.toLowerCase();
+            row.style.display = name.includes(filterText) ? '' : 'none';
+        }
+    });
 }
 
 function exportAttendance() {

@@ -48,8 +48,9 @@
     .shift-C { background-color: rgba(245, 158, 11, 0.15); color: #f59e0b; font-weight: bold; border-radius: 4px; border: 1px solid #f59e0b; }
 </style>
 
-<!-- Group Filter Tabs -->
-<div class="group-filter-tabs mb-2" id="group-filter-tabs">
+<!-- Group Filter Tabs & Search -->
+<div class="d-flex align-center justify-between mb-2" style="flex-wrap: wrap; gap: 1rem;">
+    <div class="group-filter-tabs mb-0" id="group-filter-tabs">
     <button class="group-tab active" data-group="all" onclick="filterByGroup('all')" id="tab-all">
         📋 Todo el Personal
     </button>
@@ -66,6 +67,10 @@
     <button class="group-tab group-tab-3" data-group="3" onclick="filterByGroup('3')" id="tab-group-3">
         🟣 Grupo 3
     </button>
+    </div>
+    <div class="search-box" style="margin-left: auto;">
+        <input type="text" id="worker-search" class="form-control" placeholder="🔍 Buscar trabajador..." autocomplete="off" style="width: 240px; border-radius: 20px; background-color: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.4rem 1rem;">
+    </div>
 </div>
 
 <div class="card p-0">
