@@ -193,28 +193,21 @@ def create_or_update_entry():
             elif new_shift in ['M', 'T', 'N']:
                 rotation = {'M': 'N', 'N': 'T', 'T': 'M'}
                 active_shift = new_shift
-                last_was_d = False
                 
                 # Autocomplete future work days until end of month
                 for d in range(day + 1, num_days + 1):
                     dt = date(year, month, d)
                     existing_entry = ScheduleEntry.query.filter_by(worker_id=worker_id, year=year, month=month, day=d).first()
                     
-                    # Detect Monday for blind weekly rotation (if NO rests are scheduled)
-                    if dt.weekday() == 0 and not last_was_d:
-                        # Ensures the shift rotates at the start of the week IF we aren't already rotating from a 'D'
+                    # Exact mathematical Monday trigger: Strict rotation ignoring rests
+                    if dt.weekday() == 0:
                         active_shift = rotation[active_shift]
                     
-                    if existing_entry and existing_entry.shift_code == 'D':
-                        # Valid rotation boundary hit! (End of work cycle)
-                        if not last_was_d:
-                            active_shift = rotation[active_shift]
-                            last_was_d = True
-                    elif existing_entry and existing_entry.shift_code in ['R', 'CLEAR', 'NI']:
-                        # Skip special locks and freezes
+                    if existing_entry and existing_entry.shift_code in ['D', 'R', 'CLEAR', 'NI']:
+                        # Skip placing the shift here to respect existing 'D' or locks
+                        # But the 'active_shift' context remains intact for the rest of the week!
                         pass
                     else:
-                        last_was_d = False
                         if existing_entry:
                             existing_entry.shift_code = active_shift
                             existing_entry.is_auto_generated = True
