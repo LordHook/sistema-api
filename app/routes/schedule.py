@@ -33,7 +33,7 @@ def get_schedule():
     else:
         group = 'all'
         
-    grid = get_schedule_grid(year, month, group_filter=group, user_role=current_user.role)
+    grid = get_schedule_grid(year, month, group_filter=group, user_role=current_user.role, username=current_user.username)
     return jsonify(grid)
 
 

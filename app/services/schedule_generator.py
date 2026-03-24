@@ -276,7 +276,7 @@ def _generate_sequential_schedule(workers, year, month, num_days, shift_rotation
     return entries
 
 
-def get_schedule_grid(year, month, group_filter=None, user_role='admin'):
+def get_schedule_grid(year, month, group_filter=None, user_role='admin', username=None):
     """Returns the schedule data structured for the grid view.
     group_filter: 'all', 'staff', '1', '2', '3', or None
     user_role: 'admin', 'supervisor', etc to apply visibility rules.
@@ -308,8 +308,17 @@ def get_schedule_grid(year, month, group_filter=None, user_role='admin'):
         elif w.status == 'activo':
             relevant_workers.append(w)
 
-    # Apply group filter
-    if group_filter and group_filter != 'all':
+    # Apply strict RBAC username filter
+    user_to_group = {'wormeno': 1, 'ainape': 2, 'jbellido': 3}
+    if username in user_to_group:
+        gnum = user_to_group[username]
+        relevant_workers = [w for w in relevant_workers
+                            if (w.section == 'D' and (w.group_number or 1) == gnum) 
+                            or (w.section == 'C' and w.group_number == gnum)
+                            or w.section == 'B'
+                            or w.section == 'TD']
+        group_filter = str(gnum) # Override to ensure correct section tabs render
+    elif group_filter and group_filter != 'all':
         if group_filter == 'staff':
             relevant_workers = [w for w in relevant_workers if w.section in ('A', 'B', 'C', 'TD')]
         elif group_filter.isdigit():
@@ -320,9 +329,9 @@ def get_schedule_grid(year, month, group_filter=None, user_role='admin'):
                                 or (w.section == 'C' and w.group_number == gnum)
                                 or w.section == 'TD']
 
-    # Security Rules: Hide Section A from Supervisors.
-    # We already filtered them, but enforce strictly here.
-    if user_role == 'supervisor':
+    # Security Rules: Hide Section A from Supervisors and Auditor.
+    # We already filtered them, but enforce strictly here for 'auditoria' or anyone bypassing.
+    if user_role == 'supervisor' or username == 'auditoria':
         relevant_workers = [w for w in relevant_workers if w.section != 'A']
 
     entries = ScheduleEntry.query.filter_by(year=year, month=month).all()
