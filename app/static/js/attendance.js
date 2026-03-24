@@ -48,7 +48,7 @@ async function loadAttendanceGrid() {
         }
         const grid = await apiFetch(url);
         
-        document.getElementById('month-label').textContent = `${grid.month_name} ${grid.year}`;
+        document.getElementById('current-month-label').textContent = `${grid.month_name} ${grid.year}`;
         setTimeout(() => filterWorkersByText('worker-search', 'attendance-container'), 100);
         
         currentDayBackend = grid.current_day;
