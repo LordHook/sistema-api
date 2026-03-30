@@ -31,13 +31,13 @@ class ScheduleEntry(db.Model):
     }
 
     SHIFT_COLORS = {
-        'M': '#22c55e',  # green
-        'T': '#f59e0b',  # amber
-        'N': '#6366f1',  # indigo
-        'D': '#64748b',  # slate
-        'V': '#06b6d4',  # cyan
-        'C': '#a855f7',  # purple
-        'R': '#ef4444',  # red
+        'M': '#4ade80',  # Soft Green (Emerald 400)
+        'T': '#fcd34d',  # Soft Amber (Amber 300)
+        'N': '#818cf8',  # Soft Indigo (Indigo 400)
+        'D': '#94a3b8',  # Soft Slate (Slate 400)
+        'V': '#22d3ee',  # Soft Cyan (Cyan 400)
+        'C': '#c084fc',  # Soft Purple (Purple 400)
+        'R': '#f87171',  # Soft Red (Red 400)
     }
 
     def __repr__(self):

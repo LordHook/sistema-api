@@ -15,6 +15,32 @@ from app.extensions import db
 from app.models.schedule import ScheduleEntry
 from app.models.worker import Worker
 
+def _apply_monthly_snapshots(workers, year, month):
+    from app.models.worker import MonthlyWorkerStatus
+    snapshots = MonthlyWorkerStatus.query.filter_by(year=year, month=month).all()
+    snap_map = {s.worker_id: s for s in snapshots}
+    
+    for w in workers:
+        if w.id in snap_map:
+            w.section = snap_map[w.id].section
+            w.group_number = snap_map[w.id].group_number
+    return workers
+
+def _ensure_snapshots_exist(workers, year, month):
+    from app.models.worker import MonthlyWorkerStatus
+    snapshots = MonthlyWorkerStatus.query.filter_by(year=year, month=month).all()
+    snap_map = {s.worker_id: s for s in snapshots}
+    
+    new_snaps = []
+    for w in workers:
+        if w.id not in snap_map:
+            snap = MonthlyWorkerStatus(worker_id=w.id, year=year, month=month, section=w.section, group_number=w.group_number)
+            new_snaps.append(snap)
+            
+    if new_snaps:
+        db.session.add_all(new_snaps)
+        db.session.flush()
+
 
 def generate_monthly_schedule(year, month):
     """Genera el rol de servicio completo para un mes dado (todo el personal)."""
@@ -27,6 +53,8 @@ def generate_monthly_schedule(year, month):
     db.session.flush()
 
     all_workers = _get_relevant_workers(year, month)
+    _ensure_snapshots_exist(all_workers, year, month)
+    all_workers = _apply_monthly_snapshots(all_workers, year, month)
 
     # Group workers by section
     sections = {'A': [], 'B': [], 'C': [], 'D': []}
@@ -57,6 +85,9 @@ def generate_group_schedule(year, month, group_number):
     num_days = calendar.monthrange(year, month)[1]
 
     all_workers = _get_relevant_workers(year, month)
+    _ensure_snapshots_exist(all_workers, year, month)
+    all_workers = _apply_monthly_snapshots(all_workers, year, month)
+    
     group_workers = [w for w in all_workers if w.section == 'D' and (w.group_number or 1) == group_number]
 
     if not group_workers:
@@ -292,6 +323,8 @@ def get_schedule_grid(year, month, group_filter=None, user_role='admin', usernam
         if 'GUERRERO VALLEJO' in name_upper or 'VASQUEZ ESTRELLA' in name_upper:
             w.section = 'TD'
 
+    workers = _apply_monthly_snapshots(workers, year, month)
+
     # Filter to relevant workers
     relevant_workers = []
     for w in workers:
@@ -307,6 +340,12 @@ def get_schedule_grid(year, month, group_filter=None, user_role='admin', usernam
         # Otherwise show if active
         elif w.status == 'activo':
             relevant_workers.append(w)
+        else:
+            # Fallback for perfectly tracking historical data of 'inactivo' workers
+            # Include them ONLY if they have schedule entries in this specific month
+            has_entries = ScheduleEntry.query.filter_by(worker_id=w.id, year=year, month=month).count() > 0
+            if has_entries:
+                relevant_workers.append(w)
 
     # Apply strict RBAC username filter
     user_to_group = {'wormeno': 1, 'ainape': 2, 'jbellido': 3}
@@ -503,7 +542,17 @@ def _build_worker_rows(workers, entry_map, num_days, sort_by_pattern=False):
         })
         
     if sort_by_pattern:
-        rows.sort(key=lambda r: ("".join(d['shift'] or '_' for d in r['days']), r['worker']['order_number'] or 0))
+        def get_first_rest_day(row_days):
+            for i, d in enumerate(row_days):
+                if d['shift'] == 'D':
+                    return i
+            return 999
+            
+        rows.sort(key=lambda r: (
+            get_first_rest_day(r['days']), 
+            "".join(d['shift'] or '_' for d in r['days']), 
+            r['worker']['order_number'] or 0
+        ))
         
     return {'rows': rows}
 

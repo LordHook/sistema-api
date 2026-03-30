@@ -717,15 +717,20 @@ select.form-control {
     font-style: italic;
 }
 
-/* Shift colors (Tenue backgrounds, distinct text) */
-.shift-M { background: rgba(34, 197, 94, 0.15); color: var(--accent-green); }
-.shift-T { background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); }
-.shift-N { background: rgba(99, 102, 241, 0.15); color: var(--accent-indigo); }
-.shift-D { background: rgba(59, 130, 246, 0.15); color: var(--accent-blue); font-weight: 800;}
-.shift-V { background: rgba(6, 182, 212, 0.15); color: var(--accent-cyan); }
-.shift-C { background: rgba(168, 85, 247, 0.15); color: var(--accent-purple); }
-.shift-R { background: rgba(239, 68, 68, 0.15); color: var(--accent-red); }
+/* Shift colors (Soft Pastel variants for Dark Mode) */
+.shift-M { background: rgba(74, 222, 128, 0.15); color: #4ade80; } /* Soft Green */
+.shift-T { background: rgba(252, 211, 77, 0.15); color: #fcd34d; } /* Soft Amber */
+.shift-N { background: rgba(129, 140, 248, 0.15); color: #818cf8; } /* Soft Indigo */
+.shift-D { background: rgba(148, 163, 184, 0.15); color: #cbd5e1; font-weight: 800;} /* Soft Slate */
+.shift-V { background: rgba(34, 211, 238, 0.15); color: #67e8f9; } /* Soft Cyan */
+.shift-C { background: rgba(192, 132, 252, 0.15); color: #d8b4fe; } /* Soft Purple */
+.shift-R { background: rgba(248, 113, 113, 0.15); color: #fca5a5; } /* Soft Red */
 .shift-NI { background: rgba(100, 116, 139, 0.3); color: var(--text-muted); cursor: not-allowed; }
+
+/* Attendance specific colors (Soft Pastel) */
+.shift-A { background: rgba(74, 222, 128, 0.15); color: #4ade80; } /* Soft Green - Asistió */
+.shift-F { background: rgba(248, 113, 113, 0.15); color: #fca5a5; } /* Soft Red - Falto */
+.shift-T { background: rgba(252, 211, 77, 0.15); color: #fcd34d; } /* Soft Amber - Tardanza */
 
 .shift-painting {
     border: 2px dashed var(--border-hover) !important;

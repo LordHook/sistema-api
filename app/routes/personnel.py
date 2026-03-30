@@ -28,8 +28,14 @@ def personnel_page():
 @personnel_bp.route('/api/personnel', methods=['GET'])
 @login_required
 def get_personnel():
-    workers = Worker.query.order_by(Worker.section, Worker.group_number,
-                                     Worker.order_number).all()
+    status_filter = request.args.get('status', 'activo')
+    query = Worker.query
+    if status_filter == 'inactivo':
+        query = query.filter_by(status='inactivo')
+    elif status_filter == 'activo':
+        query = query.filter_by(status='activo')
+        
+    workers = query.order_by(Worker.section, Worker.group_number, Worker.order_number).all()
     return jsonify([{
         'id': w.id,
         'order_number': w.order_number,
@@ -93,10 +99,14 @@ def update_worker(worker_id):
     data = request.get_json()
 
     changes = []
+    section_changed = False
+    
     for field in ['first_name', 'last_name', 'regime', 'section', 'area', 'group_number']:
         if field in data and getattr(worker, field) != data[field]:
             changes.append(f'{field}: {getattr(worker, field)} → {data[field]}')
             setattr(worker, field, data[field])
+            if field in ['section', 'group_number']:
+                section_changed = True
 
     # Handle resignation
     if 'resignation_date' in data:
@@ -110,6 +120,21 @@ def update_worker(worker_id):
             )
 
     if changes:
+        if section_changed:
+            from app.models.worker import MonthlyWorkerStatus
+            current_date = date.today()
+            # Update existing snapshots from this month onwards
+            snapshots = MonthlyWorkerStatus.query.filter(
+                MonthlyWorkerStatus.worker_id == worker.id,
+                db.or_(
+                    MonthlyWorkerStatus.year > current_date.year,
+                    db.and_(MonthlyWorkerStatus.year == current_date.year, MonthlyWorkerStatus.month >= current_date.month)
+                )
+            ).all()
+            for snap in snapshots:
+                snap.section = worker.section
+                snap.group_number = worker.group_number
+
         AuditLog.log(
             user_id=current_user.id,
             action='worker_change',
@@ -131,9 +156,9 @@ def delete_worker(worker_id):
         user_id=current_user.id,
         action='worker_change',
         target_worker_id=worker.id,
-        details=f'Trabajador eliminado: {worker.full_name}',
+        details=f'Trabajador deshabilitado: {worker.full_name}',
     )
 
-    db.session.delete(worker)
+    worker.status = 'inactivo'
     db.session.commit()
-    return jsonify({'message': 'Trabajador eliminado exitosamente'})
+    return jsonify({'message': 'Trabajador deshabilitado exitosamente'})

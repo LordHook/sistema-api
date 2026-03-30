@@ -144,7 +144,7 @@ def save_attendance(worker_id, target_date, status, user_id, notes=None):
     return record
 
 
-def get_dashboard_stats(target_date=None, user_role='admin', assigned_group=None):
+def get_dashboard_stats(target_date=None, user_role='admin', username=None, assigned_group='all'):
     """Get statistics for the dashboard."""
     if target_date is None:
         target_date = date.today()
@@ -152,20 +152,30 @@ def get_dashboard_stats(target_date=None, user_role='admin', assigned_group=None
     year = target_date.year
     month = target_date.month
 
+    # ENFORCE STRICT RBAC
+    user_to_group = {'wormeno': 1, 'ainape': 2, 'jbellido': 3}
+    if username in user_to_group:
+        assigned_group = str(user_to_group[username])
+
     workers_query = Worker.query.filter_by(status='activo')
-    if user_role == 'supervisor':
-        if assigned_group:
-            # Filter for their specific group or Section B
-            workers_query = workers_query.filter(
-                db.or_(
-                    db.and_(Worker.section == 'D', Worker.group_number == assigned_group),
-                    Worker.section == 'B'
-                )
-            )
+
+    if assigned_group and assigned_group != 'all':
+        if assigned_group == 'staff':
+            workers_query = workers_query.filter(Worker.section.in_(['A', 'B', 'C', 'TD']))
         else:
-            # Fallback if no group assigned
-            workers_query = workers_query.filter(Worker.section == 'B')
-            
+            try:
+                gnum = int(assigned_group)
+                workers_query = workers_query.filter(
+                    db.or_(
+                        db.and_(Worker.section == 'D', Worker.group_number == gnum),
+                        db.and_(Worker.section == 'C', Worker.group_number == gnum),
+                        Worker.section == 'B',
+                        Worker.section == 'TD'
+                    )
+                )
+            except ValueError:
+                pass
+
     relevant_worker_ids = [w.id for w in workers_query.all()]
     total_active = len(relevant_worker_ids)
 

@@ -206,15 +206,18 @@ async function silentUpdateShift(workerId, day, newShift, cellElement) {
     
     setTimeout(() => cellElement.classList.remove('shift-painting'), 600);
 
+    const autoCompCheck = document.getElementById('toggle-autocomplete');
+    const auto_complete = autoCompCheck ? autoCompCheck.checked : false;
+
     try {
         await apiFetch(`/api/schedule/entry`, {
             method: 'POST',
-            body: JSON.stringify({ worker_id: parseInt(workerId), year: currentYear, month: currentMonth, day: parseInt(day), shift_code: newShift }),
+            body: JSON.stringify({ worker_id: parseInt(workerId), year: currentYear, month: currentMonth, day: parseInt(day), shift_code: newShift, auto_complete: auto_complete }),
         });
         
         // Optimistic UI updates are fast, but for cascaded shifts (R, D, M, T, N) 
         // we reload the grid to reflect auto-generated downstream entries.
-        if (['R', 'D', 'M', 'T', 'N'].includes(newShift)) {
+        if (auto_complete && ['R', 'D', 'M', 'T', 'N'].includes(newShift)) {
             setTimeout(() => loadSchedule(), 400); 
         }
     } catch (e) {
@@ -324,11 +327,14 @@ async function saveShiftChange() {
     const workerId = document.getElementById('shift-worker-id').value;
     const day = document.getElementById('shift-day').value;
     const newShift = document.getElementById('shift-select').value;
+    
+    const autoCompCheck = document.getElementById('toggle-autocomplete');
+    const auto_complete = autoCompCheck ? autoCompCheck.checked : false;
 
     try {
         await apiFetch(`/api/schedule/entry`, {
             method: 'POST',
-            body: JSON.stringify({ worker_id: parseInt(workerId), year: currentYear, month: currentMonth, day: parseInt(day), shift_code: newShift }),
+            body: JSON.stringify({ worker_id: parseInt(workerId), year: currentYear, month: currentMonth, day: parseInt(day), shift_code: newShift, auto_complete: auto_complete }),
         });
         showFlash('Turno actualizado');
         closeShiftModal();

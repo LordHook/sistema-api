@@ -40,3 +40,23 @@ class Worker(db.Model):
 
     def __repr__(self):
         return f'<Worker {self.order_number}: {self.full_name}>'
+
+class MonthlyWorkerStatus(db.Model):
+    __tablename__ = 'monthly_worker_status'
+    __table_args__ = (
+        db.UniqueConstraint('worker_id', 'year', 'month', name='uq_monthly_status_worker_period'),
+        db.Index('ix_monthly_status_period', 'year', 'month'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    worker_id = db.Column(db.Integer, db.ForeignKey('workers.id', ondelete='CASCADE'), nullable=False, index=True)
+    year = db.Column(db.Integer, nullable=False)
+    month = db.Column(db.Integer, nullable=False)
+    section = db.Column(db.String(5), nullable=False)
+    group_number = db.Column(db.Integer, nullable=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    worker = db.relationship('Worker', backref=db.backref('monthly_statuses', lazy='dynamic', cascade='all, delete-orphan'), overlaps="attendance_records,schedule_entries,worker")
+
+    def __repr__(self):
+        return f'<MonthlyStatus {self.worker_id} {self.year}-{self.month:02d}: Sec {self.section} Grp {self.group_number}>'

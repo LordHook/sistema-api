@@ -282,6 +282,10 @@ def export_attendance_excel(year, month, group_filter=None, user_role='admin'):
                     
                     if att_status in att_colors:
                         cell.fill = att_colors[att_status]
+                    elif att_status.startswith('T '):
+                        cell.fill = att_colors['tardanza']
+                    elif att_status in SHIFT_FILLS:
+                        cell.fill = SHIFT_FILLS.get(att_status)
                     elif day_data['shift'] in ['D', 'V', 'C', 'R']:
                         # Use schedule background if not marked
                         cell.fill = SHIFT_FILLS.get(day_data['shift'])

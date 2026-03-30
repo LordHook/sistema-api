@@ -70,12 +70,35 @@ async function loadAttendanceGrid() {
 }
 
 /* ===== BRUSH PALETTE ===== */
-function setBrush(shift) {
+async function setBrush(shift) {
+    if (shift === 'T') {
+        // Modal for capturing time
+        const { value: time } = await Swal.fire({
+            title: 'Ingresa la hora de tardanza',
+            input: 'time',
+            inputLabel: 'Hora de llegada exacta',
+            inputPlaceholder: 'HH:MM',
+            showCancelButton: true,
+            confirmButtonText: 'Seleccionar',
+            cancelButtonText: 'Cancelar'
+        });
+        if (time) {
+            shift = `T (${time})`;
+        } else {
+            // Cancelled
+            return;
+        }
+    }
+
     currentBrush = shift;
+    
+    // UI update matching exact string or base T
     document.querySelectorAll('.brush-btn').forEach(btn => btn.classList.remove('active'));
     
     if (shift) {
-        const btn = document.querySelector(`.brush-btn[data-shift="${shift}"]`);
+        // If it starts with T we highlight the T button!
+        const matchShift = shift.startsWith('T ') ? 'T' : shift;
+        const btn = document.querySelector(`.brush-btn[data-shift="${matchShift}"]`);
         if (btn) btn.classList.add('active');
     } else {
         const offBtn = document.querySelector(`.brush-btn[data-shift=""]`);
@@ -163,7 +186,11 @@ function renderAttendanceGrid(grid) {
                         }
                         displayVal = `<span style="font-size:0.70rem; font-weight:bold; color:var(--text-muted); opacity:1;">${scheduledShift}</span>`;
                     } else if (status) {
-                        cellClasses += ` shift-${status}`;
+                        if (status.startsWith('T ')) {
+                            cellClasses += ` shift-T`;
+                        } else {
+                            cellClasses += ` shift-${status}`;
+                        }
                         displayVal = status;
                     } else if (scheduledShift && !WORK_SHIFTS.includes(scheduledShift)) {
                         cellClasses += ` shift-${scheduledShift}-hint`;
@@ -272,9 +299,12 @@ async function silentUpdateStatus(workerId, day, newStatus, cellElement) {
         cellElement.innerHTML = '';
         cellElement.setAttribute('data-status', '');
     } else {
-        cellElement.className = `cell-shift cell-att editable-cell interactive-att-cell shift-${newStatus}`;
         if (['PO','PC','PV','DM','V','LM','LE','PS'].includes(newStatus)) {
             cellElement.classList.add(`bg-${newStatus.toLowerCase()}`);
+        } else if (newStatus.startsWith('T ')) {
+            cellElement.classList.add('shift-T');
+        } else {
+            cellElement.classList.add(`shift-${newStatus}`);
         }
         cellElement.innerHTML = newStatus;
         cellElement.setAttribute('data-status', newStatus);
@@ -282,11 +312,14 @@ async function silentUpdateStatus(workerId, day, newStatus, cellElement) {
     }
     setTimeout(() => cellElement.classList.remove('shift-painting'), 600);
 
+    const autoCompCheck = document.getElementById('toggle-autocomplete');
+    const auto_complete = autoCompCheck ? autoCompCheck.checked : false;
+
     try {
         const response = await fetch('/api/attendance', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ worker_id: workerId, date: dateStr, status: newStatus, notes: '' })
+            body: JSON.stringify({ worker_id: workerId, date: dateStr, status: newStatus, notes: '', auto_complete: auto_complete })
         });
         
         const data = await response.json();
@@ -322,7 +355,13 @@ function handleAttCellClick(workerId, workerName, day, currentStatus, allowedShi
     document.getElementById('modal-day').value = day;
     document.getElementById('modal-worker-name').textContent = workerName;
     document.getElementById('modal-day-label').textContent = day;
-    document.getElementById('status-select').value = currentStatus || 'A';
+    
+    // Remove the time from the select if it's a T status
+    let selectVal = currentStatus || 'A';
+    if (selectVal.startsWith('T ')) {
+        selectVal = 'T';
+    }
+    document.getElementById('status-select').value = selectVal;
 
     document.getElementById('attendance-modal').classList.add('active');
 }
@@ -334,14 +373,34 @@ function closeAttendanceModal() {
 async function saveStatus() {
     const workerId = document.getElementById('modal-worker-id').value;
     const day = document.getElementById('modal-day').value;
-    const status = document.getElementById('status-select').value;
+    let status = document.getElementById('status-select').value;
     const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    
+    if (status === 'T') {
+        const { value: time } = await Swal.fire({
+            title: 'Ingresa la hora de tardanza',
+            input: 'time',
+            inputLabel: 'Hora de llegada exacta',
+            inputPlaceholder: 'HH:MM',
+            showCancelButton: true,
+            confirmButtonText: 'Guardar',
+            cancelButtonText: 'Cancelar'
+        });
+        if (time) {
+            status = `T (${time})`;
+        } else {
+            return; // Cancel
+        }
+    }
+    
+    const autoCompCheck = document.getElementById('toggle-autocomplete');
+    const auto_complete = autoCompCheck ? autoCompCheck.checked : false;
     
     try {
         const response = await fetch('/api/attendance', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ worker_id: parseInt(workerId), date: dateStr, status: status, notes: '' })
+            body: JSON.stringify({ worker_id: parseInt(workerId), date: dateStr, status: status, notes: '', auto_complete: auto_complete })
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error);

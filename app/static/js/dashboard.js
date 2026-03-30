@@ -3,11 +3,22 @@
 let pieChart = null;
 let barChart = null;
 
-document.addEventListener('DOMContentLoaded', loadDashboard);
+document.addEventListener('DOMContentLoaded', () => {
+    const today = new Date().toISOString().split('T')[0];
+    const dateInput = document.getElementById('dashboard-date-filter');
+    if (dateInput) dateInput.value = today;
+    loadDashboard();
+});
 
 async function loadDashboard() {
+    const groupFilter = document.getElementById('dashboard-group-filter')?.value || 'all';
+    const dateFilter = document.getElementById('dashboard-date-filter')?.value || '';
+    
+    let url = `/api/dashboard/stats?group=${groupFilter}`;
+    if (dateFilter) url += `&date=${dateFilter}`;
+    
     try {
-        const stats = await apiFetch('/api/dashboard/stats');
+        const stats = await apiFetch(url);
         updateKPIs(stats);
         renderPieChart(stats.today);
         renderBarChart(stats.group_stats);

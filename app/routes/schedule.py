@@ -95,6 +95,7 @@ def create_or_update_entry():
         year = data.get('year')
         month = data.get('month')
         new_shift = data.get('shift_code')
+        auto_complete = data.get('auto_complete', True)
 
         if not all([worker_id, year, month, day]):
             return jsonify({'error': 'Faltan parámetros de fecha o trabajador'}), 400
@@ -116,6 +117,11 @@ def create_or_update_entry():
             # Validate allowed shifts if it is M, T, or N
             worker = Worker.query.get(worker_id)
             if worker and new_shift in ['M', 'T', 'N']:
+                # PROTECT SPECIAL CODES FROM OVERWRITES
+                protected_codes = ['PO', 'PC', 'PV', 'DM', 'V', 'LM', 'LE', 'PS', 'C', 'R', 'D']
+                if old_shift in protected_codes:
+                    return jsonify({'error': f'Celda protegida: Borra {old_shift} antes de asignar turno regular.'}), 400
+
                 allowed = (worker.allowed_shifts or 'M,T,N').split(',')
                 if new_shift not in allowed:
                     return jsonify({'error': f'El trabajador no tiene habilitado el turno {new_shift}'}), 400
@@ -143,7 +149,7 @@ def create_or_update_entry():
             entry.is_auto_generated = False
 
             # Handle Resignation special case
-            if new_shift == 'R':
+            if new_shift == 'R' and auto_complete:
                 if worker:
                     worker.resignation_date = date(year, month, day)
                 
@@ -153,27 +159,28 @@ def create_or_update_entry():
                 for d in range(day + 1, num_days + 1):
                     existing_entry = ScheduleEntry.query.filter_by(worker_id=worker_id, year=year, month=month, day=d).first()
                     if existing_entry:
-                        existing_entry.shift_code = 'R'
-                        existing_entry.is_auto_generated = True
+                        # Only overwrite empty cells
+                        if existing_entry.shift_code in ['CLEAR', 'NI', None, '']:
+                            existing_entry.shift_code = 'R'
+                            existing_entry.is_auto_generated = True
                     else:
                         new_entry = ScheduleEntry(worker_id=worker_id, year=year, month=month, day=d, shift_code='R', is_auto_generated=True)
                         db.session.add(new_entry)
 
             # NEW AUTO-COMPLETE LOGIC FOR SECTION D and TD
-            if worker and worker.section in ['D', 'TD']:
+            if auto_complete and worker and worker.section in ['D', 'TD']:
                 import calendar
-                from datetime import date as dt_date
                 _, num_days = calendar.monthrange(year, month)
                 
                 if new_shift == 'D':
                     curr_rest_day = day
-                    target_date = dt_date(year, month, day)
+                    target_date = date(year, month, day)
                     pending_extra_rest = False
                     if target_date.weekday() == 6: # Sunday
                         pending_extra_rest = True
                         
                     for curr_d in range(day + 1, num_days + 1):
-                        loop_date = dt_date(year, month, curr_d)
+                        loop_date = date(year, month, curr_d)
                         assign_d = False
                         
                         if pending_extra_rest:
@@ -194,7 +201,7 @@ def create_or_update_entry():
                         if assign_d:
                             existing_entry = ScheduleEntry.query.filter_by(worker_id=worker_id, year=year, month=month, day=curr_d).first()
                             if existing_entry:
-                                if existing_entry.shift_code not in ['R', 'CLEAR', 'NI']:
+                                if existing_entry.shift_code in ['CLEAR', 'NI', None, '']:
                                     existing_entry.shift_code = 'D'
                                     existing_entry.is_auto_generated = True
                             else:
@@ -207,15 +214,15 @@ def create_or_update_entry():
                     
                     # Autocomplete future work days until end of month
                     for d in range(day + 1, num_days + 1):
-                        loop_date = dt_date(year, month, d)
+                        loop_date = date(year, month, d)
                         existing_entry = ScheduleEntry.query.filter_by(worker_id=worker_id, year=year, month=month, day=d).first()
                         
                         # Exact mathematical Monday trigger: Strict rotation ignoring rests
                         if loop_date.weekday() == 0:
                             active_shift = rotation[active_shift]
                         
-                        if existing_entry and existing_entry.shift_code in ['D', 'R', 'CLEAR', 'NI']:
-                            # Skip placing the shift here to respect existing 'D' or locks
+                        if existing_entry and existing_entry.shift_code not in ['CLEAR', 'NI', None, '']:
+                            # Skip placing the shift here to respect existing data
                             # But the 'active_shift' context remains intact for the rest of the week!
                             pass
                         else:
@@ -230,7 +237,7 @@ def create_or_update_entry():
                 user_id=current_user.id,
                 action='schedule_change',
                 target_worker_id=worker_id,
-                target_date=dt_date(year, month, day),
+                target_date=date(year, month, day),
                 old_value=old_shift or 'vacio',
                 new_value=new_shift,
                 details=f'Turno modificado manualmente',

@@ -24,7 +24,8 @@ def exec_cmd(cmd):
     return out
 
 print("--- 1. Commit and Pull en Repositorio Git ---")
-exec_cmd("cd /api && git pull origin main && git log -1")
+# exec_cmd("cd /api && git pull origin main && git log -1")
+print("Bypassed Git pull. Using SFTP modified files in /api directly.")
 
 print("--- 2. Autodescubrimiento del Directorio de Produccion ---")
 out = exec_cmd("netstat -tulpn | grep :5000")
@@ -50,6 +51,7 @@ else:
     print("No hay procesos en puerto 5000. Usando ruta por defecto: /opt/cco")
 
 print(f"--- 3. Sincronizacion Codigo hacia {app_dir} ---")
+exec_cmd(f"rm -rf {app_dir}/app")
 exec_cmd(f"\\cp -r /api/* {app_dir}/")
 
 print("--- 4. Destruccion de Procesos Zombies en puerto 5000 ---")
@@ -63,6 +65,10 @@ time.sleep(2)
 print(f"--- 5. Reinicio Seguro de la App en {app_dir} ---")
 # Install reqs just in case
 exec_cmd(f"cd {app_dir} && source .venv/bin/activate && pip install -r requirements.txt || true")
+# Exec database cleanup on Production Postgres
+exec_cmd(f"cd {app_dir} && source .venv/bin/activate && python3 clean_duplicates.py")
+# Exec database missing tables and historical seeding
+exec_cmd(f"cd {app_dir} && source .venv/bin/activate && python3 migrate_and_seed.py")
 # Star background process
 exec_cmd(f"cd {app_dir} && nohup python3 run.py --host=0.0.0.0 --port=5000 > /dev/null 2>&1 &")
 

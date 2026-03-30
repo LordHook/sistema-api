@@ -26,12 +26,46 @@ async function loadPersonnel() {
 }
 
 /* ===== VIEW TOGGLE ===== */
-function switchView(view) {
+async function switchView(view) {
     currentView = view;
     document.getElementById('view-table').style.display = view === 'table' ? '' : 'none';
     document.getElementById('view-groups').style.display = view === 'groups' ? '' : 'none';
+    document.getElementById('view-resignations').style.display = view === 'resignations' ? '' : 'none';
+    
     document.getElementById('btn-view-table').className = view === 'table' ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
     document.getElementById('btn-view-groups').className = view === 'groups' ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
+    document.getElementById('btn-view-resignations').className = view === 'resignations' ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
+
+    if (view === 'resignations') {
+        loadResignations();
+    }
+}
+
+async function loadResignations() {
+    try {
+        const inactives = await apiFetch('/api/personnel?status=inactivo');
+        renderResignations(inactives);
+    } catch (e) {
+        // handled
+    }
+}
+
+function renderResignations(workers) {
+    const tbody = document.getElementById('resignations-table-body');
+    if (workers.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">📂</div><h4>No hay trabajadores inactivos o renuncias registradas</h4></div></td></tr>`;
+        return;
+    }
+    
+    tbody.innerHTML = workers.map(w => `
+        <tr>
+            <td>${w.order_number}</td>
+            <td><span class="badge badge-${w.regime.toLowerCase()}">${w.regime}</span></td>
+            <td><strong>${w.full_name}</strong></td>
+            <td>Sección ${w.section} - ${w.area}</td>
+            <td><span class="badge badge-${w.resignation_date ? 'inactive' : 'ls'}">${w.resignation_date ? 'Renuncia (R)' : 'Deshabilitado'}</span></td>
+            <td>${w.resignation_date ? `<b>${w.resignation_date}</b>` : '-'}</td>
+        </tr>`).join('');
 }
 
 /* ===== TABLE VIEW ===== */

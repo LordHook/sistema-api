@@ -16,10 +16,12 @@ def dashboard():
 @login_required
 def dashboard_stats():
     date_str = request.args.get('date')
+    req_group = request.args.get('group', 'all')
     target_date = date.fromisoformat(date_str) if date_str else date.today()
     stats = get_dashboard_stats(
         target_date, 
         user_role=current_user.role, 
-        assigned_group=current_user.assigned_group
+        username=current_user.username,
+        assigned_group=req_group
     )
     return jsonify(stats)
