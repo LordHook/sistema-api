@@ -274,6 +274,8 @@ def export_attendance_excel(year, month, group_filter=None, user_role='admin'):
                     elif att_status == 'asistio': display_text = 'A'
                     elif att_status == 'falto': display_text = 'F'
                     elif att_status: display_text = att_status
+                    elif day_data.get('shift') and day_data.get('shift') not in ['M', 'T', 'N', 'CLEAR', 'NI']:
+                        display_text = day_data.get('shift')
                     
                     cell = ws.cell(row=current_row, column=col, value=display_text)
                     cell.alignment = Alignment(horizontal='center', vertical='center')
@@ -286,9 +288,12 @@ def export_attendance_excel(year, month, group_filter=None, user_role='admin'):
                         cell.fill = att_colors['tardanza']
                     elif att_status in SHIFT_FILLS:
                         cell.fill = SHIFT_FILLS.get(att_status)
-                    elif day_data['shift'] in ['D', 'V', 'C', 'R']:
-                        # Use schedule background if not marked
-                        cell.fill = SHIFT_FILLS.get(day_data['shift'])
+                    elif not att_status and day_data.get('shift') not in ['M', 'T', 'N', 'CLEAR', 'NI', None, '']:
+                        shift_val = day_data.get('shift')
+                        if shift_val in SHIFT_FILLS:
+                            cell.fill = SHIFT_FILLS.get(shift_val)
+                        elif shift_val in att_colors:
+                            cell.fill = att_colors.get(shift_val)
 
                 current_row += 1
         current_row += 1
