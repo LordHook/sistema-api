@@ -119,25 +119,29 @@ def generate_group_schedule(year, month, group_number):
 
 def _get_relevant_workers(year, month):
     """Get active workers, those who resigned during this month, and filtering by start_date."""
-    workers = Worker.query.filter_by(status='activo').order_by(Worker.order_number).all()
-    resigned_this_month = Worker.query.filter(
-        Worker.status == 'inactivo',
-        Worker.resignation_date != None,  # noqa: E711
-        db.extract('year', Worker.resignation_date) == year,
-        db.extract('month', Worker.resignation_date) == month,
-    ).order_by(Worker.order_number).all()
-
-    # Combinar
-    all_workers = workers + [w for w in resigned_this_month if w not in workers]
+    # Buscar todos y filtrar en memoria para garantizar lógica temporal perfecta (N ~ 150)
+    all_workers = Worker.query.order_by(Worker.order_number).all()
     
-    # Filtrar ingresos futuros: si la start_date es de un mes futuro, no listarlo
     filtered_workers = []
     for w in all_workers:
+        # Filtrar ingresos futuros
         if w.start_date:
             if w.start_date.year > year or (w.start_date.year == year and w.start_date.month > month):
-                continue # No ha ingresado en este mes ni antes
-        filtered_workers.append(w)
-        
+                continue
+                
+        # Lógica de Cese
+        if w.resignation_date:
+            res_year = w.resignation_date.year
+            res_month = w.resignation_date.month
+            # Mostrar SÓLO si la renuncia ocurrió EN EL MISMO MES o EN EL FUTURO
+            if res_year > year or (res_year == year and res_month >= month):
+                filtered_workers.append(w)
+            continue
+            
+        # Si no tiene fecha de renuncia, mostrar solo activos
+        if w.status == 'activo':
+            filtered_workers.append(w)
+            
     return filtered_workers
 
 

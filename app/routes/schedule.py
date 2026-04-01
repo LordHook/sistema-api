@@ -119,7 +119,7 @@ def create_or_update_entry():
             if worker and new_shift in ['M', 'T', 'N']:
                 # PROTECT SPECIAL CODES FROM OVERWRITES
                 protected_codes = ['PO', 'PC', 'PV', 'DM', 'V', 'LM', 'LE', 'PS', 'C', 'R', 'D']
-                if old_shift in protected_codes:
+                if old_shift in protected_codes and not current_user.is_admin:
                     return jsonify({'error': f'Celda protegida: Borra {old_shift} antes de asignar turno regular.'}), 400
 
                 allowed = (worker.allowed_shifts or 'M,T,N').split(',')

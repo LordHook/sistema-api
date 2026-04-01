@@ -29,13 +29,34 @@ def personnel_page():
 @login_required
 def get_personnel():
     status_filter = request.args.get('status', 'activo')
-    query = Worker.query
-    if status_filter == 'inactivo':
-        query = query.filter_by(status='inactivo')
-    elif status_filter == 'activo':
-        query = query.filter_by(status='activo')
-        
-    workers = query.order_by(Worker.section, Worker.group_number, Worker.order_number).all()
+    year = request.args.get('year', type=int)
+    month = request.args.get('month', type=int)
+    
+    workers = Worker.query.order_by(Worker.section, Worker.group_number, Worker.order_number).all()
+    
+    filtered_workers = []
+    
+    for w in workers:
+        if status_filter == 'inactivo':
+            # Vista Historial: Mostrar todos los dados de baja, inactivos o con cese
+            if w.status in ['inactivo', 'deshabilitado'] or w.resignation_date is not None:
+                filtered_workers.append(w)
+            continue
+            
+        # Para filtro 'activo' o matriz principal:
+        if year and month:
+            # Ocultar si renunció antes del mes que estamos visualizando
+            if w.resignation_date:
+                res_year = w.resignation_date.year
+                res_month = w.resignation_date.month
+                if res_year < year or (res_year == year and res_month < month):
+                    continue
+            filtered_workers.append(w)
+        else:
+            # Fallback seguro sin mes/año
+            if w.status == 'activo':
+                filtered_workers.append(w)
+
     return jsonify([{
         'id': w.id,
         'order_number': w.order_number,

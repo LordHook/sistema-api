@@ -3,7 +3,19 @@
 let currentView = 'table';
 let allWorkers = [];
 
-document.addEventListener('DOMContentLoaded', loadPersonnel);
+document.addEventListener('DOMContentLoaded', () => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+    
+    const filterYear = document.getElementById('filter-year');
+    const filterMonth = document.getElementById('filter-month');
+    
+    if (filterYear) filterYear.value = currentYear.toString();
+    if (filterMonth) filterMonth.value = currentMonth.toString();
+    
+    loadPersonnel();
+});
 
 const AREA_OPTIONS = {
     'A': [{ value: 'Jefatura', label: 'Jefatura CCO' }],
@@ -13,13 +25,18 @@ const AREA_OPTIONS = {
         { value: 'CCO', label: 'CCO - Centro de Control' },
         { value: 'SCV', label: 'SCV - Sala de Video' },
     ],
+    'TD': [{ value: 'CCO', label: 'CCO - Turno Diferenciado' }]
 };
 
 async function loadPersonnel() {
     try {
-        allWorkers = await apiFetch('/api/personnel');
+        const year = document.getElementById('filter-year') ? document.getElementById('filter-year').value : new Date().getFullYear();
+        const month = document.getElementById('filter-month') ? document.getElementById('filter-month').value : (new Date().getMonth() + 1);
+        
+        allWorkers = await apiFetch(`/api/personnel?year=${year}&month=${month}`);
         renderPersonnelTable(allWorkers);
         renderGroupCards(allWorkers);
+        if (typeof filterPersonnelLocally === 'function') filterPersonnelLocally();
     } catch (e) {
         // handled
     }
@@ -63,9 +80,29 @@ function renderResignations(workers) {
             <td><span class="badge badge-${w.regime.toLowerCase()}">${w.regime}</span></td>
             <td><strong>${w.full_name}</strong></td>
             <td>Sección ${w.section} - ${w.area}</td>
-            <td><span class="badge badge-${w.resignation_date ? 'inactive' : 'ls'}">${w.resignation_date ? 'Renuncia (R)' : 'Deshabilitado'}</span></td>
+            <td><span class="badge badge-${w.status === 'inactivo' ? 'inactive' : 'ls'}">${w.resignation_date ? 'Renuncia / Cese' : 'Deshabilitado'}</span></td>
             <td>${w.resignation_date ? `<b>${w.resignation_date}</b>` : '-'}</td>
+            <td>
+                <div class="d-flex gap-1" style="justify-content: center;">
+                    <button class="btn btn-outline btn-sm" style="color:var(--accent-green); border-color:var(--accent-green);" onclick="reactivateWorker(${w.id})" title="Restaurar a Activo">🔄 Activar</button>
+                </div>
+            </td>
         </tr>`).join('');
+}
+
+async function reactivateWorker(id) {
+    if (!confirm('¿Estás seguro de reactivar este trabajador? Volverá a aparecer en las listas activas y en los Horarios de los meses actuales.')) return;
+    try {
+        await apiFetch(`/api/personnel/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ resignation_date: '', status: 'activo' })
+        });
+        showFlash('Trabajador reactivado exitosamente', 'success');
+        loadResignations();
+        loadPersonnel(); // refresca los datos globales si vuelve a cambiar a tabla principal
+    } catch (e) {
+        // handled
+    }
 }
 
 /* ===== TABLE VIEW ===== */
@@ -316,5 +353,48 @@ async function deleteWorker(id) {
     } catch (e) {
         // handled
     }
+}
+
+/* ===== NEW FUNCTIONALITIES ===== */
+function filterPersonnelLocally() {
+    const searchEl = document.getElementById('personnel-search');
+    if (!searchEl) return;
+    const term = searchEl.value.toLowerCase().trim();
+    
+    // Filter Table
+    const tbody = document.getElementById('personnel-table-body');
+    if (tbody) {
+        const rows = tbody.querySelectorAll('tr');
+        rows.forEach(r => {
+            const text = r.textContent.toLowerCase();
+            r.style.display = text.includes(term) ? '' : 'none';
+        });
+    }
+    
+    // Filter Group Cards
+    const chips = document.querySelectorAll('.worker-chip');
+    chips.forEach(c => {
+        const text = c.textContent.toLowerCase();
+        c.style.display = text.includes(term) ? '' : 'none';
+    });
+}
+
+function setCeseFinDeMes() {
+    const filterYear = document.getElementById('filter-year');
+    const filterMonth = document.getElementById('filter-month');
+    
+    let year = new Date().getFullYear();
+    let month = new Date().getMonth() + 1;
+    
+    if (filterYear && filterMonth) {
+        year = parseInt(filterYear.value);
+        month = parseInt(filterMonth.value);
+    }
+    
+    // Last day of month
+    const d = new Date(year, month, 0); 
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    
+    document.getElementById('worker-resignation').value = dateStr;
 }
 

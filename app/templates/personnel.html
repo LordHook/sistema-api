@@ -13,10 +13,30 @@
 
 {% block content %}
 <!-- Vista Toggle: Tabla / Grupos -->
-<div class="d-flex gap-1 mb-2">
-    <button class="btn btn-primary btn-sm" id="btn-view-table" onclick="switchView('table')">📋 Vista Tabla</button>
-    <button class="btn btn-outline btn-sm" id="btn-view-groups" onclick="switchView('groups')">🏢 Vista Grupos</button>
-    <button class="btn btn-outline btn-sm" id="btn-view-resignations" onclick="switchView('resignations')">🛑 Historial Renuncias / Inactivos</button>
+<div class="d-flex gap-1 mb-2 align-center" style="flex-wrap: wrap; justify-content: space-between;">
+    <div class="d-flex gap-1">
+        <button class="btn btn-primary btn-sm" id="btn-view-table" onclick="switchView('table')">📋 Vista Tabla</button>
+        <button class="btn btn-outline btn-sm" id="btn-view-groups" onclick="switchView('groups')">🏢 Vista Grupos</button>
+        <button class="btn btn-outline btn-sm" id="btn-view-resignations" onclick="switchView('resignations')">🛑 Historial Renuncias / Inactivos</button>
+    </div>
+    
+    <div class="d-flex gap-1 align-center">
+        <!-- Filtro Mes/Año -->
+        <select id="filter-month" class="form-control" style="width: 140px; padding: 0.3rem 0.6rem;" onchange="loadPersonnel()">
+            <option value="1">Enero</option><option value="2">Febrero</option><option value="3">Marzo</option>
+            <option value="4">Abril</option><option value="5">Mayo</option><option value="6">Junio</option>
+            <option value="7">Julio</option><option value="8">Agosto</option><option value="9">Septiembre</option>
+            <option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option>
+        </select>
+        <select id="filter-year" class="form-control" style="width: 100px; padding: 0.3rem 0.6rem;" onchange="loadPersonnel()">
+            <option value="2024">2024</option>
+            <option value="2025">2025</option>
+            <option value="2026">2026</option>
+            <option value="2027">2027</option>
+        </select>
+        <!-- Buscador -->
+        <input type="text" id="personnel-search" class="form-control" placeholder="🔍 Buscar trabajador..." autocomplete="off" style="width: 200px; padding: 0.3rem 1rem; border-radius: 20px;" oninput="filterPersonnelLocally()">
+    </div>
 </div>
 
 <!-- ========== VISTA TABLA ========== -->
@@ -187,6 +207,7 @@
                             <option value="B">B - Gestión de Video</option>
                             <option value="C">C - Supervisores</option>
                             <option value="D">D - Operativo</option>
+                            <option value="TD">TD - Personal Turno Diferenciado</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -208,8 +229,11 @@
                 </div>
 
                 <div class="form-group" id="resignation-field" style="display: none;">
-                    <label for="worker-resignation">Fecha de Renuncia</label>
-                    <input type="date" class="form-control" id="worker-resignation">
+                    <label for="worker-resignation">Fecha de Renuncia / Cese</label>
+                    <div class="d-flex gap-1 align-center">
+                        <input type="date" class="form-control" id="worker-resignation">
+                        <button type="button" class="btn btn-outline btn-sm" onclick="setCeseFinDeMes()" style="white-space: nowrap;" title="Trabajará solo hasta fin de mes">🏁 Cese fin de mes</button>
+                    </div>
                     <small class="text-muted">Dejar vacío si el trabajador está activo</small>
                 </div>
             </form>
