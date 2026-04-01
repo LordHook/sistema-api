@@ -60,7 +60,10 @@ async function switchView(view) {
 
 async function loadResignations() {
     try {
-        const inactives = await apiFetch('/api/personnel?status=inactivo');
+        const year = document.getElementById('filter-year') ? document.getElementById('filter-year').value : new Date().getFullYear();
+        const month = document.getElementById('filter-month') ? document.getElementById('filter-month').value : (new Date().getMonth() + 1);
+        
+        const inactives = await apiFetch(`/api/personnel?status=inactivo&year=${year}&month=${month}`);
         renderResignations(inactives);
     } catch (e) {
         // handled
@@ -80,7 +83,7 @@ function renderResignations(workers) {
             <td><span class="badge badge-${w.regime.toLowerCase()}">${w.regime}</span></td>
             <td><strong>${w.full_name}</strong></td>
             <td>Sección ${w.section} - ${w.area}</td>
-            <td><span class="badge badge-${w.status === 'inactivo' ? 'inactive' : 'ls'}">${w.resignation_date ? 'Renuncia / Cese' : 'Deshabilitado'}</span></td>
+            <td><span class="badge badge-${w.status === 'inactivo' ? 'inactive' : 'ls'}">${w.resignation_date ? 'Renuncia / Cese' : 'Inactivo'}</span></td>
             <td>${w.resignation_date ? `<b>${w.resignation_date}</b>` : '-'}</td>
             <td>
                 <div class="d-flex gap-1" style="justify-content: center;">

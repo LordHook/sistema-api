@@ -24,8 +24,8 @@ def exec_cmd(cmd):
     return out
 
 print("--- 1. Commit and Pull en Repositorio Git ---")
-# exec_cmd("cd /api && git pull origin main && git log -1")
-print("Bypassed Git pull. Using SFTP modified files in /api directly.")
+exec_cmd("cd /api && git fetch origin main && git reset --hard origin/main && git log -1")
+print("Git pull realizado. Usando archivos más recientes de /api.")
 
 print("--- 2. Autodescubrimiento del Directorio de Produccion ---")
 out = exec_cmd("netstat -tulpn | grep :5000")

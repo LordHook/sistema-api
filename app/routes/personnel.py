@@ -40,6 +40,14 @@ def get_personnel():
         if status_filter == 'inactivo':
             # Vista Historial: Mostrar todos los dados de baja, inactivos o con cese
             if w.status in ['inactivo', 'deshabilitado'] or w.resignation_date is not None:
+                # Si estamos filtrando estrictamente por mes:
+                if year and month and w.resignation_date:
+                    res_year = w.resignation_date.year
+                    res_month = w.resignation_date.month
+                    # En la vista de Abril, no mostrar las renuncias de Marzo
+                    # Solo mostrar las que concuerden con el mes o estemos viendo un mes histórico
+                    if res_year < year or (res_year == year and res_month < month):
+                        continue
                 filtered_workers.append(w)
             continue
             
