@@ -63,7 +63,13 @@ async function loadResignations() {
         const year = document.getElementById('filter-year') ? document.getElementById('filter-year').value : new Date().getFullYear();
         const month = document.getElementById('filter-month') ? document.getElementById('filter-month').value : (new Date().getMonth() + 1);
         
-        const inactives = await apiFetch(`/api/personnel?status=inactivo&year=${year}&month=${month}`);
+        const showAll = document.getElementById('check-history-all') && document.getElementById('check-history-all').checked;
+        let queryParams = `?status=inactivo`;
+        if (!showAll) {
+            queryParams += `&year=${year}&month=${month}`;
+        }
+        
+        const inactives = await apiFetch(`/api/personnel${queryParams}`);
         renderResignations(inactives);
     } catch (e) {
         // handled

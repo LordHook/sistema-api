@@ -171,9 +171,17 @@
 <!-- ========== VISTA HISTORIAL RENUNCIAS E INACTIVOS ========== -->
 <div id="view-resignations" style="display: none;">
     <div class="card">
-        <div class="card-header" style="background: var(--bg-card);">
-            <h3 style="color: var(--accent-red); margin:0;">🛑 Personal Inactivo y Cesado</h3>
-            <small class="text-muted">Trabajadores que han sido deshabilitados o cuyo cese programado ha sido activado.</small>
+        <div class="card-header" style="background: var(--bg-card); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div>
+                <h3 style="color: var(--accent-red); margin:0;">🛑 Personal Inactivo y Cesado</h3>
+                <small class="text-muted">Trabajadores deshabilitados o con fecha de cese programada.</small>
+            </div>
+            <div>
+                <label style="cursor:pointer; display:flex; align-items:center; gap:8px; color: var(--text-color); font-weight: bold; font-size: 0.9rem; padding: 5px 10px; background: rgba(255,255,255,0.05); border-radius: 8px;">
+                    <input type="checkbox" id="check-history-all" onchange="loadResignations()" style="cursor:pointer;">
+                    Ver Todo el Historial Global
+                </label>
+            </div>
         </div>
         <div class="card-body" style="padding: 0;">
             <div class="table-container">
