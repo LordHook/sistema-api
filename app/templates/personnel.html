@@ -168,6 +168,35 @@
     </div>
 </div>
 
+<!-- ========== VISTA HISTORIAL RENUNCIAS E INACTIVOS ========== -->
+<div id="view-resignations" style="display: none;">
+    <div class="card">
+        <div class="card-header" style="background: var(--bg-card);">
+            <h3 style="color: var(--accent-red); margin:0;">🛑 Personal Inactivo y Cesado</h3>
+            <small class="text-muted">Trabajadores que han sido deshabilitados o cuyo cese programado ha sido activado.</small>
+        </div>
+        <div class="card-body" style="padding: 0;">
+            <div class="table-container">
+                <table class="table" id="resignations-table">
+                    <thead>
+                        <tr>
+                            <th>N°</th>
+                            <th>Régimen</th>
+                            <th>Apellidos y Nombres</th>
+                            <th>Sección y Área</th>
+                            <th>Estado Actual</th>
+                            <th>Fecha Cese</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resignations-table-body">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Add/Edit Worker Modal -->
 <div class="modal-backdrop" id="worker-modal-backdrop">
     <div class="modal" style="max-width: 600px;">
@@ -280,6 +309,6 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/personnel.js') }}"></script>
+<script src="{{ url_for('static', filename='js/personnel.js') }}?v=3.1"></script>
 {% endblock %}
 
