@@ -202,8 +202,6 @@ def _generate_sequential_schedule(workers, year, month, num_days, shift_rotation
         last_date_checked = date(year, month, 1) - timedelta(days=1)
         prev_entries = []
         if not section_a_rules:
-            # Use a cross-DB compatible approach: fetch recent entries and filter in Python
-            # Look back up to 2 months to find anchor data
             prev_month = month - 1 if month > 1 else 12
             prev_year = year if month > 1 else year - 1
             raw_entries = ScheduleEntry.query.filter(
@@ -217,48 +215,54 @@ def _generate_sequential_schedule(workers, year, month, num_days, shift_rotation
                 ScheduleEntry.month.desc(), 
                 ScheduleEntry.day.desc()
             ).all()
-            # Filter to only entries on or before last_date_checked
             prev_entries = [
                 e for e in raw_entries
                 if date(e.year, e.month, e.day) <= last_date_checked
             ][:14]
 
+        # Descubrimiento de Anclajes de Tiempo
         last_rest_date = None
-        current_shift_index = base_shift_index
         pending_extra_rest = False
+        
+        # Anclaje de Lunes (Strict Weekly Sequence)
+        # Asumimos el índice base de la sección como punto de inicio por defecto
+        anchor_monday = date(2024, 1, 1) # Un lunes arbitrario en el pasado lejano
+        anchor_shift_index = base_shift_index
 
         if prev_entries:
-            work_shifts = [e.shift_code for e in prev_entries if e.shift_code in shift_rotation]
-            if work_shifts:
-                most_recent_shift = work_shifts[0]
-                if most_recent_shift in shift_rotation:
-                    current_shift_index = shift_rotation.index(most_recent_shift)
-            
-            # Check the last rest
+            # Encontrar el último descanso para el patrón de 8 días
             if prev_entries[0].shift_code == 'D' and date(prev_entries[0].year, prev_entries[0].month, prev_entries[0].day).weekday() == 6:
                 pending_extra_rest = True
-                # Logical anchor was before Sunday, pretend anchor was an invisible start
                 last_rest_date = date(prev_entries[0].year, prev_entries[0].month, prev_entries[0].day) - timedelta(days=8)
             else:
                 for e in prev_entries:
                     if e.shift_code == 'D':
                         last_rest_date = date(e.year, e.month, e.day)
                         break
+                        
+            # Encontrar el último turno real trabajado ('M', 'N', 'T') para anclar el ciclo semanal en la semana correcta
+            work_shifts = [(e.shift_code, date(e.year, e.month, e.day)) for e in prev_entries if e.shift_code in shift_rotation]
+            if work_shifts:
+                most_recent_shift, prev_working_date = work_shifts[0]
+                if most_recent_shift in shift_rotation:
+                    anchor_shift_index = shift_rotation.index(most_recent_shift)
+                    # El Lunes matemático que rige la semana de ese último turno trabajado
+                    anchor_monday = prev_working_date - timedelta(days=prev_working_date.weekday())
 
-        # If no previous entries, fake an initial anchor date based on their order
+        # Si no hay historial de descansos, forjamos el ciclo inicial
         if not last_rest_date:
             rest_day_start = (idx % 7) + 1
             last_rest_date = date(year, month, 1) - timedelta(days = 8 - rest_day_start)
             
-        # 2. Sequence through the month
+        # Generar Secuencia Diaria
         for day in range(1, num_days + 1):
             current_date = date(year, month, day)
 
-            # Check if this is a manually set entry (vacation, compensated)
+            # Check existing manual manual entries
             existing = ScheduleEntry.query.filter_by(
                 worker_id=worker.id, year=year, month=month, day=day, is_auto_generated=False
             ).first()
-            if existing: # do not touch manual entries
+            if existing:
                 continue
 
             # Check start_date mid-month entry
@@ -277,31 +281,37 @@ def _generate_sequential_schedule(workers, year, month, num_days, shift_rotation
                 ))
                 continue
 
-            # Process state machine
+            # CÁLCULO DE CICLO SEMANAL ESTRICTO 
+            # Hallamos qué Lunes rige la fecha actual
+            current_monday = current_date - timedelta(days=current_date.weekday())
+            # Diferencia en semanas vs nuestra semana ancla (la última vez que trabajó con certeza un turno base)
+            weeks_diff = (current_monday - anchor_monday).days // 7
+            
+            # El índice de turno corresponde rotar estrictamente 1 por semana. 
+            weekly_shift_index = (anchor_shift_index + weeks_diff) % len(shift_rotation)
+            weekly_base_shift = shift_rotation[weekly_shift_index] if not is_fixed else shift_rotation[0]
+
+            # DETERMINACIÓN FINAL DEL DÍA (Considerando Descansos)
             if section_a_rules:
                 if current_date.weekday() >= 5: # 5=Sat, 6=Sun
                     shift = 'D'
                 else:
-                    shift = shift_rotation[0] # Default shift (typically 'M')
+                    shift = shift_rotation[0]
             elif pending_extra_rest:
-                # Give Monday as requested
+                # Descanso de Lunes después del Domingo compensador
                 shift = 'D'
                 pending_extra_rest = False
                 last_rest_date = current_date
-                if not is_fixed:
-                    current_shift_index = (current_shift_index + 1) % len(shift_rotation)
             else:
                 days_since_rest = (current_date - last_rest_date).days
-                if days_since_rest >= 8: # Hit next rest day
+                if days_since_rest >= 8:
                     shift = 'D'
                     if current_date.weekday() == 6: # Sunday
                         pending_extra_rest = True
                     else:
                         last_rest_date = current_date
-                        if not is_fixed:
-                            current_shift_index = (current_shift_index + 1) % len(shift_rotation)
                 else:
-                    shift = shift_rotation[current_shift_index] if not is_fixed else shift_rotation[0]
+                    shift = weekly_base_shift
 
             entries.append(ScheduleEntry(
                 worker_id=worker.id, year=year, month=month, day=day,

@@ -146,10 +146,25 @@ function renderAttendanceGrid(grid) {
         html += `<th class="${dh.is_weekend ? 'weekend' : ''}" style="${isToday}">${dh.weekday}<br>${dh.day}</th>`;
     });
     html += '</tr></thead><tbody>';
+    
+    // Preparar sub-cabecera repetitiva para UX (Scroll largo)
+    let subHeader = `<tr class="calendar-repeat-header" style="background: rgba(255,255,255,0.02); font-size: 0.75rem; border-bottom: 2px solid var(--border-color); text-align: center; color: var(--text-muted);">`;
+    subHeader += '<th class="col-num">N°</th>';
+    subHeader += '<th class="col-rl">R.L</th>';
+    subHeader += '<th class="col-name">Trabajador</th>';
+    grid.day_headers.forEach(dh => {
+        const isToday = (dh.day === currentDayBackend) ? 'border-bottom: 3px solid var(--accent-blue); color: var(--accent-blue);' : '';
+        subHeader += `<th class="${dh.is_weekend ? 'weekend' : ''}" style="${isToday}">${dh.weekday}<br>${dh.day}</th>`;
+    });
+    subHeader += '</tr>';
 
-    grid.sections.forEach(section => {
+    grid.sections.forEach((section, idx) => {
         html += `<tr><td class="section-header" colspan="${grid.num_days + 3}">
             SECCIÓN ${section.key}: ${section.name}</td></tr>`;
+            
+        if (idx !== 0) {
+            html += subHeader; // Repetir visualmente
+        }
 
         section.groups.forEach(group => {
             if (group.label) {
