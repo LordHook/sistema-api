@@ -42,6 +42,14 @@ async function loadPersonnel() {
     }
 }
 
+function triggerFilter() {
+    if (currentView === 'resignations') {
+        loadResignations();
+    } else {
+        loadPersonnel();
+    }
+}
+
 /* ===== VIEW TOGGLE ===== */
 async function switchView(view) {
     currentView = view;

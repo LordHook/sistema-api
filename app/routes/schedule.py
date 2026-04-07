@@ -168,7 +168,7 @@ def create_or_update_entry():
                         db.session.add(new_entry)
 
             # NEW AUTO-COMPLETE LOGIC FOR SECTION D
-            if auto_complete and worker and worker.section == 'Sección D - Rol de Servicio Operativo':
+            if auto_complete and worker and worker.section and worker.section.startswith('Sección D'):
                 from app.services.schedule_generator import cascade_forward_shift
                 cascade_forward_shift(worker_id, year, month, day, new_shift)
 
