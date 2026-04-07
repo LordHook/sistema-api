@@ -6,14 +6,15 @@
 
 {% block page_actions %}
 <div class="d-flex gap-2" style="align-items: center;">
-    <input type="date" class="form-control form-control-sm" id="dashboard-date-filter" onchange="loadDashboard()" style="width: auto;">
-    <select class="form-control form-control-sm" id="dashboard-group-filter" onchange="loadDashboard()">
+    <input type="date" class="form-control form-control-sm" id="dashboard-date-filter" style="width: auto;">
+    <select class="form-control form-control-sm" id="dashboard-group-filter">
         <option value="all">🌐 Todos los Grupos</option>
         <option value="1">🔵 Grupo 1</option>
         <option value="2">🟢 Grupo 2</option>
         <option value="3">🟣 Grupo 3</option>
         <option value="staff">🏛️ Staff (A/B/C/TD)</option>
     </select>
+    <button class="btn btn-primary btn-sm" onclick="loadDashboard()">🔍 Filtrar</button>
     <button class="btn btn-outline btn-sm" onclick="openAuditModal()" id="btn-open-audit-dash">📋 Auditoría</button>
 </div>
 {% endblock %}

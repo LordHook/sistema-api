@@ -167,71 +167,10 @@ def create_or_update_entry():
                         new_entry = ScheduleEntry(worker_id=worker_id, year=year, month=month, day=d, shift_code='R', is_auto_generated=True)
                         db.session.add(new_entry)
 
-            # NEW AUTO-COMPLETE LOGIC FOR SECTION D and TD
-            if auto_complete and worker and worker.section in ['D', 'TD']:
-                import calendar
-                _, num_days = calendar.monthrange(year, month)
-                
-                if new_shift == 'D':
-                    curr_rest_day = day
-                    target_date = date(year, month, day)
-                    pending_extra_rest = False
-                    if target_date.weekday() == 6: # Sunday
-                        pending_extra_rest = True
-                        
-                    for curr_d in range(day + 1, num_days + 1):
-                        loop_date = date(year, month, curr_d)
-                        assign_d = False
-                        
-                        if pending_extra_rest:
-                            # Exactly Lunes after Domingo Doble
-                            assign_d = True
-                            pending_extra_rest = False
-                            curr_rest_day = curr_d # Lunes is the new anchor for the strict +7 day cycle
-                        else:
-                            days_since_rest = curr_d - curr_rest_day
-                            if days_since_rest >= 8: # Escalonado 8-day calendar leap
-                                assign_d = True
-                                if loop_date.weekday() == 6: # Next rest falls on Sunday
-                                    pending_extra_rest = True
-                                    # Wait until tomorrow to shift the anchor
-                                else:
-                                    curr_rest_day = curr_d
-                                    
-                        if assign_d:
-                            existing_entry = ScheduleEntry.query.filter_by(worker_id=worker_id, year=year, month=month, day=curr_d).first()
-                            if existing_entry:
-                                if existing_entry.shift_code in ['CLEAR', 'NI', None, '']:
-                                    existing_entry.shift_code = 'D'
-                                    existing_entry.is_auto_generated = True
-                            else:
-                                new_entry = ScheduleEntry(worker_id=worker_id, year=year, month=month, day=curr_d, shift_code='D', is_auto_generated=True)
-                                db.session.add(new_entry)
-
-                elif new_shift in ['M', 'T', 'N']:
-                    rotation = {'M': 'N', 'N': 'T', 'T': 'M'}
-                    active_shift = new_shift
-                    
-                    # Autocomplete future work days until end of month
-                    for d in range(day + 1, num_days + 1):
-                        loop_date = date(year, month, d)
-                        existing_entry = ScheduleEntry.query.filter_by(worker_id=worker_id, year=year, month=month, day=d).first()
-                        
-                        # Exact mathematical Monday trigger: Strict rotation ignoring rests
-                        if loop_date.weekday() == 0:
-                            active_shift = rotation[active_shift]
-                        
-                        if existing_entry and existing_entry.shift_code not in ['CLEAR', 'NI', None, '']:
-                            # Skip placing the shift here to respect existing data
-                            # But the 'active_shift' context remains intact for the rest of the week!
-                            pass
-                        else:
-                            if existing_entry:
-                                existing_entry.shift_code = active_shift
-                                existing_entry.is_auto_generated = True
-                            else:
-                                new_entry = ScheduleEntry(worker_id=worker_id, year=year, month=month, day=d, shift_code=active_shift, is_auto_generated=True)
-                                db.session.add(new_entry)
+            # NEW AUTO-COMPLETE LOGIC FOR SECTION D
+            if auto_complete and worker and worker.section == 'Sección D - Rol de Servicio Operativo':
+                from app.services.schedule_generator import cascade_forward_shift
+                cascade_forward_shift(worker_id, year, month, day, new_shift)
 
             AuditLog.log(
                 user_id=current_user.id,

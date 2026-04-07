@@ -22,18 +22,19 @@
     
     <div class="d-flex gap-1 align-center">
         <!-- Filtro Mes/Año -->
-        <select id="filter-month" class="form-control" style="width: 140px; padding: 0.3rem 0.6rem;" onchange="loadPersonnel()">
+        <select id="filter-month" class="form-control" style="width: 140px; padding: 0.3rem 0.6rem;">
             <option value="1">Enero</option><option value="2">Febrero</option><option value="3">Marzo</option>
             <option value="4">Abril</option><option value="5">Mayo</option><option value="6">Junio</option>
             <option value="7">Julio</option><option value="8">Agosto</option><option value="9">Septiembre</option>
             <option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option>
         </select>
-        <select id="filter-year" class="form-control" style="width: 100px; padding: 0.3rem 0.6rem;" onchange="loadPersonnel()">
+        <select id="filter-year" class="form-control" style="width: 100px; padding: 0.3rem 0.6rem;">
             <option value="2024">2024</option>
             <option value="2025">2025</option>
             <option value="2026">2026</option>
             <option value="2027">2027</option>
         </select>
+        <button class="btn btn-primary btn-sm" onclick="loadPersonnel()" style="padding: 0.3rem 0.8rem; border-radius: 4px;">🔍 Filtrar</button>
         <!-- Buscador -->
         <input type="text" id="personnel-search" class="form-control" placeholder="🔍 Buscar trabajador..." autocomplete="off" style="width: 200px; padding: 0.3rem 1rem; border-radius: 20px;" oninput="filterPersonnelLocally()">
     </div>

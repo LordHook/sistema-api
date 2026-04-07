@@ -570,3 +570,108 @@ def _build_worker_rows(workers, entry_map, num_days, sort_by_pattern=False):
         
     return {'rows': rows}
 
+
+def cascade_forward_shift(worker_id, year, month, start_day, new_shift):
+    from app.models.worker import Worker
+    from app.models.schedule import ScheduleEntry
+    from app.extensions import db
+    from calendar import monthrange
+    from datetime import date, timedelta
+    
+    worker = Worker.query.get(worker_id)
+    if not worker or worker.section != 'Sección D - Rol de Servicio Operativo':
+        return
+        
+    shift_rotation = ['M', 'N', 'T']
+    if new_shift not in shift_rotation:
+        return
+        
+    num_days = monthrange(year, month)[1]
+    start_date = date(year, month, start_day)
+    
+    anchor_monday = start_date - timedelta(days=start_date.weekday())
+    anchor_shift_index = shift_rotation.index(new_shift)
+    
+    last_rest_date = None
+    pending_extra_rest = False
+    
+    prev_entries = ScheduleEntry.query.filter(
+        ScheduleEntry.worker_id == worker.id,
+        db.or_(
+            db.and_(ScheduleEntry.year == year, ScheduleEntry.month == month, ScheduleEntry.day <= start_day),
+            db.and_(ScheduleEntry.year == year if month > 1 else year - 1, ScheduleEntry.month == month - 1 if month > 1 else 12)
+        )
+    ).order_by(
+        ScheduleEntry.year.desc(), 
+        ScheduleEntry.month.desc(), 
+        ScheduleEntry.day.desc()
+    ).limit(14).all()
+    
+    if prev_entries:
+        if prev_entries[0].shift_code == 'D' and date(prev_entries[0].year, prev_entries[0].month, prev_entries[0].day).weekday() == 6:
+            pending_extra_rest = True
+            last_rest_date = date(prev_entries[0].year, prev_entries[0].month, prev_entries[0].day) - timedelta(days=8)
+        else:
+            for e in prev_entries:
+                if e.shift_code == 'D':
+                    last_rest_date = date(e.year, e.month, e.day)
+                    break
+    
+    if not last_rest_date:
+        last_rest_date = start_date - timedelta(days=7)
+        
+    entries_to_delete = ScheduleEntry.query.filter(
+        ScheduleEntry.worker_id == worker.id,
+        ScheduleEntry.year == year,
+        ScheduleEntry.month == month,
+        ScheduleEntry.day > start_day,
+        ScheduleEntry.is_auto_generated == True
+    ).all()
+    for e in entries_to_delete:
+        db.session.delete(e)
+    
+    db.session.flush()
+
+    new_entries = []
+    for day in range(start_day + 1, num_days + 1):
+        current_date = date(year, month, day)
+        
+        existing = ScheduleEntry.query.filter_by(
+            worker_id=worker.id, year=year, month=month, day=day, is_auto_generated=False
+        ).first()
+        if existing:
+            continue
+            
+        if worker.resignation_date and current_date >= worker.resignation_date:
+            continue
+            
+        current_monday = current_date - timedelta(days=current_date.weekday())
+        weeks_diff = (current_monday - anchor_monday).days // 7
+        
+        weekly_shift_index = (anchor_shift_index + weeks_diff) % len(shift_rotation)
+        weekly_base_shift = shift_rotation[weekly_shift_index]
+        
+        if pending_extra_rest:
+            shift = 'D'
+            pending_extra_rest = False
+            last_rest_date = current_date
+        else:
+            days_since_rest = (current_date - last_rest_date).days
+            if days_since_rest >= 8:
+                shift = 'D'
+                if current_date.weekday() == 6:
+                    pending_extra_rest = True
+                else:
+                    last_rest_date = current_date
+            else:
+                shift = weekly_base_shift
+                
+        new_entries.append(ScheduleEntry(
+            worker_id=worker.id, year=year, month=month, day=day,
+            shift_code=shift, is_auto_generated=True
+        ))
+        
+    for e in new_entries:
+        db.session.add(e)
+        
+    db.session.commit()
