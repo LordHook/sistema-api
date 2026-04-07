@@ -56,14 +56,16 @@ def get_personnel():
                     pass
         else:
             # VISTA PERSONAL ACTIVO (MATRIZ / ROL)
-            if w.status in ['inactivo', 'deshabilitado']:
-                continue  # Nunca mostrar dados de baja directos en la matriz activa
-                
             if w.resignation_date and year and month:
                 res_y = w.resignation_date.year
                 res_m = w.resignation_date.month
                 if year > res_y or (year == res_y and month > res_m):
                     # El mes que se visualiza es POSTERIOR a su renuncia. Ya no figura.
+                    continue
+                # Si llegamos aquí, la renuncia es de ESTE mes o FUTURA. ¡Debe mostrarse!
+            else:
+                # Si NO TIENE fecha de cese (o no hay filtro), aplicamos el bloqueo estricto de legacy inactivos.
+                if w.status in ['inactivo', 'deshabilitado']:
                     continue
             
             filtered_workers.append(w)
