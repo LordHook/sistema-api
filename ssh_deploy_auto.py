@@ -69,6 +69,7 @@ exec_cmd(f"cd {app_dir} && source .venv/bin/activate && pip install -r requireme
 exec_cmd(f"cd {app_dir} && source .venv/bin/activate && python3 clean_duplicates.py")
 exec_cmd(f"cd {app_dir} && source .venv/bin/activate && python3 clean_legacy_db.py")
 # Exec database missing tables and historical seeding
+exec_cmd(f"cd {app_dir} && source .venv/bin/activate && python3 migrate_area_column.py")
 exec_cmd(f"cd {app_dir} && source .venv/bin/activate && python3 migrate_and_seed.py")
 # Star background process
 exec_cmd(f"cd {app_dir} && nohup python3 run.py --host=0.0.0.0 --port=5000 > /dev/null 2>&1 &")

@@ -53,6 +53,7 @@ class MonthlyWorkerStatus(db.Model):
     year = db.Column(db.Integer, nullable=False)
     month = db.Column(db.Integer, nullable=False)
     section = db.Column(db.String(5), nullable=False)
+    area = db.Column(db.String(50), nullable=True)
     group_number = db.Column(db.Integer, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 

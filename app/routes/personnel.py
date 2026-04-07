@@ -70,19 +70,37 @@ def get_personnel():
             
             filtered_workers.append(w)
 
-    return jsonify([{
-        'id': w.id,
-        'order_number': w.order_number,
-        'first_name': w.first_name,
-        'last_name': w.last_name,
-        'full_name': w.full_name,
-        'regime': w.regime,
-        'section': w.section,
-        'area': w.area,
-        'group_number': w.group_number,
-        'status': w.status,
-        'resignation_date': w.resignation_date.isoformat() if w.resignation_date else None,
-    } for w in filtered_workers])
+    response_data = []
+    from app.models.worker import MonthlyWorkerStatus
+    
+    for w in filtered_workers:
+        snap_section = w.section
+        snap_area = w.area
+        snap_group = w.group_number
+        
+        if year and month:
+            snap = MonthlyWorkerStatus.query.filter_by(worker_id=w.id, year=year, month=month).first()
+            if snap:
+                snap_section = snap.section
+                snap_group = snap.group_number
+                if hasattr(snap, 'area') and snap.area is not None:
+                    snap_area = snap.area
+                    
+        response_data.append({
+            'id': w.id,
+            'order_number': w.order_number,
+            'first_name': w.first_name,
+            'last_name': w.last_name,
+            'full_name': w.full_name,
+            'regime': w.regime,
+            'section': snap_section,
+            'area': snap_area,
+            'group_number': snap_group,
+            'status': w.status,
+            'resignation_date': w.resignation_date.isoformat() if w.resignation_date else None,
+        })
+
+    return jsonify(response_data)
 
 
 @personnel_bp.route('/api/personnel', methods=['POST'])
@@ -117,6 +135,7 @@ def create_worker():
         year=effective_year,
         month=effective_month,
         section=worker.section,
+        area=worker.area,
         group_number=worker.group_number
     )
     db.session.add(snap)
@@ -157,7 +176,7 @@ def update_worker(worker_id):
         if field in data and getattr(worker, field) != data[field]:
             changes.append(f'{field}: {getattr(worker, field)} → {data[field]}')
             setattr(worker, field, data[field])
-            if field in ['section', 'group_number']:
+            if field in ['section', 'group_number', 'area']:
                 section_changed = True
 
     # Handle resignation
@@ -195,6 +214,7 @@ def update_worker(worker_id):
             
             for snap in snapshots:
                 snap.section = worker.section
+                snap.area = worker.area
                 snap.group_number = worker.group_number
 
         AuditLog.log(
