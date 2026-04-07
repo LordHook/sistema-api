@@ -103,6 +103,24 @@ def create_worker():
     )
     db.session.add(worker)
 
+    from app.models.worker import MonthlyWorkerStatus
+    effective_year = data.get('effective_year')
+    effective_month = data.get('effective_month')
+    
+    current_date = date.today()
+    if not effective_year or not effective_month:
+        effective_year = current_date.year
+        effective_month = current_date.month
+        
+    snap = MonthlyWorkerStatus(
+        worker=worker,
+        year=effective_year,
+        month=effective_month,
+        section=worker.section,
+        group_number=worker.group_number
+    )
+    db.session.add(snap)
+
     AuditLog.log(
         user_id=current_user.id,
         action='worker_change',
@@ -156,15 +174,25 @@ def update_worker(worker_id):
     if changes:
         if section_changed:
             from app.models.worker import MonthlyWorkerStatus
+            
+            # Use provided effective date or default to current
+            effective_year = data.get('effective_year')
+            effective_month = data.get('effective_month')
+            
             current_date = date.today()
-            # Update existing snapshots from this month onwards
+            if not effective_year or not effective_month:
+                effective_year = current_date.year
+                effective_month = current_date.month
+                
+            # Update existing snapshots from the effective month onwards
             snapshots = MonthlyWorkerStatus.query.filter(
                 MonthlyWorkerStatus.worker_id == worker.id,
                 db.or_(
-                    MonthlyWorkerStatus.year > current_date.year,
-                    db.and_(MonthlyWorkerStatus.year == current_date.year, MonthlyWorkerStatus.month >= current_date.month)
+                    MonthlyWorkerStatus.year > effective_year,
+                    db.and_(MonthlyWorkerStatus.year == effective_year, MonthlyWorkerStatus.month >= effective_month)
                 )
             ).all()
+            
             for snap in snapshots:
                 snap.section = worker.section
                 snap.group_number = worker.group_number

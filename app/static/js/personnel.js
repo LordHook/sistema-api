@@ -234,9 +234,15 @@ async function executeMoveWorker() {
     const newArea = document.getElementById('move-area').value;
 
     try {
+        const payload = { group_number: newGroup, area: newArea };
+        const filterYear = document.getElementById('filter-year')?.value;
+        const filterMonth = document.getElementById('filter-month')?.value;
+        if (filterYear) payload.effective_year = parseInt(filterYear);
+        if (filterMonth) payload.effective_month = parseInt(filterMonth);
+
         await apiFetch(`/api/personnel/${workerId}`, {
             method: 'PUT',
-            body: JSON.stringify({ group_number: newGroup, area: newArea }),
+            body: JSON.stringify(payload),
         });
         showFlash(`Trabajador movido a Grupo ${newGroup} - ${newArea}`);
         closeMoveModal();
@@ -313,6 +319,11 @@ async function saveWorker() {
             ? parseInt(document.getElementById('worker-group').value) : null,
         resignation_date: document.getElementById('worker-resignation').value || null,
     };
+    
+    const filterYear = document.getElementById('filter-year')?.value;
+    const filterMonth = document.getElementById('filter-month')?.value;
+    if (filterYear) data.effective_year = parseInt(filterYear);
+    if (filterMonth) data.effective_month = parseInt(filterMonth);
 
     if (!data.first_name || !data.last_name || !data.regime || !data.section || !data.area) {
         showFlash('Por favor completa todos los campos obligatorios', 'error');
