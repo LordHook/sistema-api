@@ -29,41 +29,44 @@ def personnel_page():
 @login_required
 def get_personnel():
     status_filter = request.args.get('status', 'activo')
-    year = request.args.get('year', type=int)
-    month = request.args.get('month', type=int)
+    year_str = request.args.get('year')
+    month_str = request.args.get('month')
+    
+    year = int(year_str) if year_str and year_str.isdigit() else None
+    month = int(month_str) if month_str and month_str.isdigit() else None
     
     workers = Worker.query.order_by(Worker.section, Worker.group_number, Worker.order_number).all()
-    
     filtered_workers = []
     
     for w in workers:
         if status_filter == 'inactivo':
-            # Vista Historial: Mostrar todos los dados de baja, inactivos o con cese
-            if w.status in ['inactivo', 'deshabilitado'] or w.resignation_date is not None:
-                # Si estamos filtrando estrictamente por mes:
-                if year and month and w.resignation_date:
-                    res_year = w.resignation_date.year
-                    res_month = w.resignation_date.month
-                    # En la vista de Abril, no mostrar las renuncias de Marzo
-                    # Solo mostrar las que concuerden con el mes o estemos viendo un mes histórico
-                    if res_year < year or (res_year == year and res_month < month):
-                        continue
-                filtered_workers.append(w)
-            continue
-            
-        # Para filtro 'activo' o matriz principal:
-        if year and month:
-            # Ocultar si renunció antes del mes que estamos visualizando
-            if w.resignation_date:
-                res_year = w.resignation_date.year
-                res_month = w.resignation_date.month
-                if res_year < year or (res_year == year and res_month < month):
-                    continue
-            filtered_workers.append(w)
+            # VISTA HISTORIAL
+            if not year or not month:
+                # Ver Totalizado (Histórico Global)
+                if w.status in ['inactivo', 'deshabilitado'] or w.resignation_date is not None:
+                    filtered_workers.append(w)
+            else:
+                # Filtro Estricto: Solo mostrar de ESTE MES
+                if w.resignation_date:
+                    if w.resignation_date.year == year and w.resignation_date.month == month:
+                        filtered_workers.append(w)
+                else:
+                    # Inactivos "Legacy" sin fecha de cese: No pertenecen a ningún mes específico.
+                    # Quedan ocultos del filtro mensual para limpiar la vista. Solo se ven en "Ver Totalizado".
+                    pass
         else:
-            # Fallback seguro sin mes/año
-            if w.status == 'activo':
-                filtered_workers.append(w)
+            # VISTA PERSONAL ACTIVO (MATRIZ / ROL)
+            if w.status in ['inactivo', 'deshabilitado']:
+                continue  # Nunca mostrar dados de baja directos en la matriz activa
+                
+            if w.resignation_date and year and month:
+                res_y = w.resignation_date.year
+                res_m = w.resignation_date.month
+                if year > res_y or (year == res_y and month > res_m):
+                    # El mes que se visualiza es POSTERIOR a su renuncia. Ya no figura.
+                    continue
+            
+            filtered_workers.append(w)
 
     return jsonify([{
         'id': w.id,
@@ -77,7 +80,7 @@ def get_personnel():
         'group_number': w.group_number,
         'status': w.status,
         'resignation_date': w.resignation_date.isoformat() if w.resignation_date else None,
-    } for w in workers])
+    } for w in filtered_workers])
 
 
 @personnel_bp.route('/api/personnel', methods=['POST'])
@@ -189,5 +192,11 @@ def delete_worker(worker_id):
     )
 
     worker.status = 'inactivo'
+    
+    # Asignar fecha de cese automáticamente al mes actual si no la tenía
+    if not worker.resignation_date:
+        from datetime import datetime
+        worker.resignation_date = datetime.utcnow().date()
+        
     db.session.commit()
     return jsonify({'message': 'Trabajador deshabilitado exitosamente'})
