@@ -67,6 +67,7 @@ print(f"--- 5. Reinicio Seguro de la App en {app_dir} ---")
 exec_cmd(f"cd {app_dir} && source .venv/bin/activate && pip install -r requirements.txt || true")
 # Exec database cleanup on Production Postgres
 exec_cmd(f"cd {app_dir} && source .venv/bin/activate && python3 clean_duplicates.py")
+exec_cmd(f"cd {app_dir} && source .venv/bin/activate && python3 clean_legacy_db.py")
 # Exec database missing tables and historical seeding
 exec_cmd(f"cd {app_dir} && source .venv/bin/activate && python3 migrate_and_seed.py")
 # Star background process
