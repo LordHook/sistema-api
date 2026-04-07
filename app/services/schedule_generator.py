@@ -573,19 +573,6 @@ def _build_worker_rows(workers, entry_map, num_days, sort_by_pattern=False):
 
 def cascade_forward_shift(worker_id, year, month, start_day, new_shift):
     from app.models.worker import Worker
-    from app.models.schedule import ScheduleEntry
-    from app.extensions import db
-    from calendar import monthrange
-    from datetime import date, timedelta
-    
-    worker = Worker.query.get(worker_id)
-    if not worker or worker.section != 'Sección D - Rol de Servicio Operativo':
-        return
-        
-    shift_rotation = ['M', 'N', 'T']
-    if new_shift not in shift_rotation:
-        return
-        
     num_days = monthrange(year, month)[1]
     start_date = date(year, month, start_day)
     
