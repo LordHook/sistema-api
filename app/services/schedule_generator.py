@@ -586,87 +586,116 @@ def cascade_forward_shift(worker_id, year, month, start_day, new_shift):
     if not worker or not worker.section or not (worker.section in ['D', 'TD'] or worker.section.startswith('Sección D') or worker.section.startswith('D')):
         return
         
-    shift_rotation = ['M', 'N', 'T']
-    start_date = date(year, month, start_day)
-    
-    # Derivar el anclaje incluso si pintaron un 'D' (Descanso)
-    anchor_shift_index = 0
-    anchor_monday = start_date - timedelta(days=start_date.weekday())
-    
-    if new_shift in shift_rotation:
-        anchor_shift_index = shift_rotation.index(new_shift)
-    else:
-        # Buscar el turno real anterior más reciente para derivar la semana
-        prev_work = ScheduleEntry.query.filter(
-            ScheduleEntry.worker_id == worker.id,
-            db.or_(
-                db.and_(ScheduleEntry.year == year, ScheduleEntry.month == month, ScheduleEntry.day < start_day),
-                db.and_(ScheduleEntry.year == year if month > 1 else year - 1, ScheduleEntry.month == month - 1 if month > 1 else 12)
-            ),
-            ScheduleEntry.shift_code.in_(shift_rotation)
-        ).order_by(
-            ScheduleEntry.year.desc(), 
-            ScheduleEntry.month.desc(), 
-            ScheduleEntry.day.desc()
-        ).first()
-        
-        if prev_work:
-            prev_date = date(prev_work.year, prev_work.month, prev_work.day)
-            prev_monday = prev_date - timedelta(days=prev_date.weekday())
-            anchor_monday = prev_monday
-            anchor_shift_index = shift_rotation.index(prev_work.shift_code)
-            
     num_days = monthrange(year, month)[1]
+    start_date = date(year, month, start_day)
+    shift_rotation = ['M', 'N', 'T']
     
-    prev_entries = ScheduleEntry.query.filter(
-        ScheduleEntry.worker_id == worker.id,
-        db.or_(
-            db.and_(ScheduleEntry.year == year, ScheduleEntry.month == month, ScheduleEntry.day <= start_day),
-            db.and_(ScheduleEntry.year == year if month > 1 else year - 1, ScheduleEntry.month == month - 1 if month > 1 else 12)
-        )
-    ).order_by(
-        ScheduleEntry.year.desc(), 
-        ScheduleEntry.month.desc(), 
-        ScheduleEntry.day.desc()
-    ).limit(14).all()
-        
-    entries_to_delete = ScheduleEntry.query.filter(
-        ScheduleEntry.worker_id == worker.id,
-        ScheduleEntry.year == year,
-        ScheduleEntry.month == month,
-        ScheduleEntry.day > start_day,
-        ScheduleEntry.is_auto_generated == True
-    ).all()
-    for e in entries_to_delete:
-        db.session.delete(e)
-    
-    db.session.flush()
+    if new_shift == 'D':
+        # MODO 1: Auto-completar SOLAMENTE descansos.
+        # Borramos descansos auto-generados posteriores. Respetamos los M/N/T.
+        entries_to_delete = ScheduleEntry.query.filter(
+            ScheduleEntry.worker_id == worker.id,
+            ScheduleEntry.year == year,
+            ScheduleEntry.month == month,
+            ScheduleEntry.day > start_day,
+            ScheduleEntry.is_auto_generated == True,
+            ScheduleEntry.shift_code == 'D'
+        ).all()
+        for e in entries_to_delete:
+            db.session.delete(e)
+        db.session.flush()
 
-    new_entries = []
-    for day in range(start_day + 1, num_days + 1):
-        current_date = date(year, month, day)
+        new_entries = []
+        last_rest_date = start_date
+        pending_extra_rest = True if start_date.weekday() == 6 else False
         
-        existing = ScheduleEntry.query.filter_by(
-            worker_id=worker.id, year=year, month=month, day=day, is_auto_generated=False
-        ).first()
-        if existing:
-            continue
+        for day in range(start_day + 1, num_days + 1):
+            current_date = date(year, month, day)
             
-        if worker.resignation_date and current_date >= worker.resignation_date:
-            continue
-            
-        current_monday = current_date - timedelta(days=current_date.weekday())
-        weeks_diff = (current_monday - anchor_monday).days // 7
+            # Saltamos celdas que ya tengan entradas manuales
+            existing = ScheduleEntry.query.filter_by(
+                worker_id=worker.id, year=year, month=month, day=day, is_auto_generated=False
+            ).first()
+            if existing:
+                if existing.shift_code in ('D', 'V', 'DM'):
+                    last_rest_date = current_date
+                    pending_extra_rest = False
+                continue
+
+            if worker.resignation_date and current_date >= worker.resignation_date:
+                continue
+
+            shift = None
+            if pending_extra_rest:
+                shift = 'D'
+                pending_extra_rest = False
+                last_rest_date = current_date
+            else:
+                days_since_rest = (current_date - last_rest_date).days
+                if days_since_rest >= 8:
+                    shift = 'D'
+                    if current_date.weekday() == 6:
+                        pending_extra_rest = True
+                    else:
+                        last_rest_date = current_date
+
+            if shift == 'D':
+                collision = ScheduleEntry.query.filter_by(worker_id=worker.id, year=year, month=month, day=day, is_auto_generated=True).first()
+                if collision:
+                    collision.shift_code = 'D'
+                else:
+                    new_entries.append(ScheduleEntry(
+                        worker_id=worker.id, year=year, month=month, day=day,
+                        shift_code='D', is_auto_generated=True
+                    ))
+                    
+        for e in new_entries:
+            db.session.add(e)
+        db.session.commit()
+    
+    elif new_shift in shift_rotation:
+        # MODO 2: Auto-completar SOLAMENTE M, N, T (Nunca inyecta D)
+        # 1. Determinar el Anclaje
+        anchor_monday = start_date - timedelta(days=start_date.weekday())
+        anchor_shift_index = shift_rotation.index(new_shift)
         
-        weekly_shift_index = (anchor_shift_index + weeks_diff) % len(shift_rotation)
-        shift = shift_rotation[weekly_shift_index]
+        # Borramos turnos M/N/T auto-generados posteriores. Respetamos los D.
+        entries_to_delete = ScheduleEntry.query.filter(
+            ScheduleEntry.worker_id == worker.id,
+            ScheduleEntry.year == year,
+            ScheduleEntry.month == month,
+            ScheduleEntry.day > start_day,
+            ScheduleEntry.is_auto_generated == True,
+            ScheduleEntry.shift_code.in_(shift_rotation)
+        ).all()
+        for e in entries_to_delete:
+            db.session.delete(e)
+        db.session.flush()
+
+        new_entries = []
+        for day in range(start_day + 1, num_days + 1):
+            current_date = date(year, month, day)
+            
+            # Saltamos si ya hay CUALQUIER registro existente (manual o auto-generado tipo D)
+            existing = ScheduleEntry.query.filter_by(
+                worker_id=worker.id, year=year, month=month, day=day
+            ).first()
+            if existing: # Si ya hay D (incluso autogenerado) u otra cosa manual, lo esquivamos.
+                continue
                 
-        new_entries.append(ScheduleEntry(
-            worker_id=worker.id, year=year, month=month, day=day,
-            shift_code=shift, is_auto_generated=True
-        ))
-        
-    for e in new_entries:
-        db.session.add(e)
-        
-    db.session.commit()
+            if worker.resignation_date and current_date >= worker.resignation_date:
+                continue
+                
+            current_monday = current_date - timedelta(days=current_date.weekday())
+            weeks_diff = (current_monday - anchor_monday).days // 7
+            weekly_shift_index = (anchor_shift_index + weeks_diff) % len(shift_rotation)
+            shift = shift_rotation[weekly_shift_index]
+                    
+            new_entries.append(ScheduleEntry(
+                worker_id=worker.id, year=year, month=month, day=day,
+                shift_code=shift, is_auto_generated=True
+            ))
+            
+        for e in new_entries:
+            db.session.add(e)
+        db.session.commit()
