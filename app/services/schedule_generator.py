@@ -265,6 +265,9 @@ def _generate_sequential_schedule(workers, year, month, num_days, shift_rotation
                 worker_id=worker.id, year=year, month=month, day=day, is_auto_generated=False
             ).first()
             if existing:
+                if existing.shift_code in ('D', 'DM', 'V'):
+                    last_rest_date = current_date
+                    pending_extra_rest = False
                 continue
 
             # Check start_date mid-month entry
@@ -584,17 +587,36 @@ def cascade_forward_shift(worker_id, year, month, start_day, new_shift):
         return
         
     shift_rotation = ['M', 'N', 'T']
-    if new_shift not in shift_rotation:
-        return
-        
-    num_days = monthrange(year, month)[1]
     start_date = date(year, month, start_day)
     
+    # Derivar el anclaje incluso si pintaron un 'D' (Descanso)
+    anchor_shift_index = 0
     anchor_monday = start_date - timedelta(days=start_date.weekday())
-    anchor_shift_index = shift_rotation.index(new_shift)
     
-    last_rest_date = None
-    pending_extra_rest = False
+    if new_shift in shift_rotation:
+        anchor_shift_index = shift_rotation.index(new_shift)
+    else:
+        # Buscar el turno real anterior más reciente para derivar la semana
+        prev_work = ScheduleEntry.query.filter(
+            ScheduleEntry.worker_id == worker.id,
+            db.or_(
+                db.and_(ScheduleEntry.year == year, ScheduleEntry.month == month, ScheduleEntry.day < start_day),
+                db.and_(ScheduleEntry.year == year if month > 1 else year - 1, ScheduleEntry.month == month - 1 if month > 1 else 12)
+            ),
+            ScheduleEntry.shift_code.in_(shift_rotation)
+        ).order_by(
+            ScheduleEntry.year.desc(), 
+            ScheduleEntry.month.desc(), 
+            ScheduleEntry.day.desc()
+        ).first()
+        
+        if prev_work:
+            prev_date = date(prev_work.year, prev_work.month, prev_work.day)
+            prev_monday = prev_date - timedelta(days=prev_date.weekday())
+            anchor_monday = prev_monday
+            anchor_shift_index = shift_rotation.index(prev_work.shift_code)
+            
+    num_days = monthrange(year, month)[1]
     
     prev_entries = ScheduleEntry.query.filter(
         ScheduleEntry.worker_id == worker.id,
@@ -607,19 +629,6 @@ def cascade_forward_shift(worker_id, year, month, start_day, new_shift):
         ScheduleEntry.month.desc(), 
         ScheduleEntry.day.desc()
     ).limit(14).all()
-    
-    if prev_entries:
-        if prev_entries[0].shift_code == 'D' and date(prev_entries[0].year, prev_entries[0].month, prev_entries[0].day).weekday() == 6:
-            pending_extra_rest = True
-            last_rest_date = date(prev_entries[0].year, prev_entries[0].month, prev_entries[0].day) - timedelta(days=8)
-        else:
-            for e in prev_entries:
-                if e.shift_code == 'D':
-                    last_rest_date = date(e.year, e.month, e.day)
-                    break
-    
-    if not last_rest_date:
-        last_rest_date = start_date - timedelta(days=7)
         
     entries_to_delete = ScheduleEntry.query.filter(
         ScheduleEntry.worker_id == worker.id,
@@ -650,22 +659,7 @@ def cascade_forward_shift(worker_id, year, month, start_day, new_shift):
         weeks_diff = (current_monday - anchor_monday).days // 7
         
         weekly_shift_index = (anchor_shift_index + weeks_diff) % len(shift_rotation)
-        weekly_base_shift = shift_rotation[weekly_shift_index]
-        
-        if pending_extra_rest:
-            shift = 'D'
-            pending_extra_rest = False
-            last_rest_date = current_date
-        else:
-            days_since_rest = (current_date - last_rest_date).days
-            if days_since_rest >= 8:
-                shift = 'D'
-                if current_date.weekday() == 6:
-                    pending_extra_rest = True
-                else:
-                    last_rest_date = current_date
-            else:
-                shift = weekly_base_shift
+        shift = shift_rotation[weekly_shift_index]
                 
         new_entries.append(ScheduleEntry(
             worker_id=worker.id, year=year, month=month, day=day,
