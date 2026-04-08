@@ -106,7 +106,7 @@ def generate_group_schedule(year, month, group_number):
     db.session.flush()
 
     # Generate only for this group
-    shift_rotation = ['M', 'T', 'N']
+    shift_rotation = ['M', 'N', 'T']
     base_shift_index = (group_number - 1) % 3
 
     entries = _generate_rotating_section(
@@ -157,7 +157,7 @@ def _generate_section_d(d_workers, year, month, num_days):
             groups[g] = []
         groups[g].append(w)
 
-    shift_rotation = ['M', 'T', 'N']
+    shift_rotation = ['M', 'N', 'T']
     for group_num in sorted(groups.keys()):
         group_workers = groups[group_num]
         base_shift_index = (group_num - 1) % 3
