@@ -24,6 +24,8 @@ def _apply_monthly_snapshots(workers, year, month):
         if w.id in snap_map:
             w.section = snap_map[w.id].section
             w.group_number = snap_map[w.id].group_number
+            if hasattr(snap_map[w.id], 'area') and snap_map[w.id].area is not None:
+                w.area = snap_map[w.id].area
     return workers
 
 def _ensure_snapshots_exist(workers, year, month):
@@ -34,7 +36,7 @@ def _ensure_snapshots_exist(workers, year, month):
     new_snaps = []
     for w in workers:
         if w.id not in snap_map:
-            snap = MonthlyWorkerStatus(worker_id=w.id, year=year, month=month, section=w.section, group_number=w.group_number)
+            snap = MonthlyWorkerStatus(worker_id=w.id, year=year, month=month, section=w.section, group_number=w.group_number, area=w.area)
             new_snaps.append(snap)
             
     if new_snaps:
